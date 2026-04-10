@@ -86,6 +86,201 @@ func NormalizeTeam(data []byte) (*Team, error) {
 	return &team, nil
 }
 
+// NormalizeTeamRosterEntries maps match-scoped competitor roster payloads into roster entries.
+func NormalizeTeamRosterEntries(data []byte, team Team, scope TeamScope, matchID string) ([]TeamRosterEntry, error) {
+	entries, err := DecodeObjectCollection[map[string]any](data, "entries")
+	if err != nil {
+		return nil, err
+	}
+
+	normalized := make([]TeamRosterEntry, 0, len(entries))
+	for _, entry := range entries {
+		athleteRef := refFromField(entry, "athlete")
+		playerID := nonEmpty(stringField(entry, "playerId"), refIDs(athleteRef)["athleteId"], refIDs(stringField(entry, "$ref"))["athleteId"])
+
+		normalized = append(normalized, TeamRosterEntry{
+			PlayerID:      playerID,
+			PlayerRef:     athleteRef,
+			DisplayName:   nonEmpty(stringField(mapField(entry, "athlete"), "displayName"), stringField(mapField(entry, "athlete"), "fullName")),
+			TeamID:        team.ID,
+			TeamRef:       team.Ref,
+			MatchID:       strings.TrimSpace(matchID),
+			Scope:         scope,
+			Captain:       boolField(entry, "captain"),
+			Starter:       boolField(entry, "starter"),
+			Active:        boolField(entry, "active"),
+			ActiveName:    stringField(entry, "activeName"),
+			PositionRef:   refFromField(entry, "position"),
+			LinescoresRef: refFromField(entry, "linescores"),
+			StatisticsRef: refFromField(entry, "statistics"),
+			Extensions: extensionsFromMap(entry,
+				"$ref", "playerId", "athlete", "captain", "starter", "active", "activeName", "position", "linescores", "statistics",
+			),
+		})
+	}
+
+	return normalized, nil
+}
+
+// NormalizeTeamAthletePage maps a global team athletes page into roster-like entries for player-command bridging.
+func NormalizeTeamAthletePage(data []byte, team Team) ([]TeamRosterEntry, error) {
+	page, err := DecodePage[Ref](data)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]TeamRosterEntry, 0, len(page.Items))
+	for _, item := range page.Items {
+		playerRef := strings.TrimSpace(item.URL)
+		if playerRef == "" {
+			continue
+		}
+
+		entries = append(entries, TeamRosterEntry{
+			PlayerID:  refIDs(playerRef)["athleteId"],
+			PlayerRef: playerRef,
+			TeamID:    team.ID,
+			TeamRef:   team.Ref,
+			Scope:     TeamScopeGlobal,
+		})
+	}
+
+	return entries, nil
+}
+
+// NormalizeTeamScore maps a score payload into a stable team score object.
+func NormalizeTeamScore(data []byte, team Team, scope TeamScope, matchID string) (*TeamScore, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	score := &TeamScore{
+		Ref:          nonEmpty(stringField(payload, "$ref"), team.ScoreRef),
+		TeamID:       team.ID,
+		MatchID:      strings.TrimSpace(matchID),
+		Scope:        scope,
+		DisplayValue: stringField(payload, "displayValue"),
+		Value:        stringField(payload, "value"),
+		Place:        stringField(payload, "place"),
+		Source:       stringField(payload, "source"),
+		Winner:       boolField(payload, "winner"),
+		Extensions: extensionsFromMap(payload,
+			"$ref", "displayValue", "value", "place", "source", "winner",
+		),
+	}
+
+	return score, nil
+}
+
+// NormalizeTeamLeaders maps category-based team leaders payloads into batting/bowling-friendly structures.
+func NormalizeTeamLeaders(data []byte, team Team, scope TeamScope, matchID string) (*TeamLeaders, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	leaders := &TeamLeaders{
+		Ref:        stringField(payload, "$ref"),
+		TeamID:     team.ID,
+		MatchID:    strings.TrimSpace(matchID),
+		Scope:      scope,
+		Name:       nonEmpty(stringField(payload, "displayName"), stringField(payload, "name"), "Leaders"),
+		Categories: []TeamLeaderCategory{},
+		Extensions: extensionsFromMap(payload, "$ref", "id", "name", "displayName", "abbreviation", "categories"),
+	}
+
+	for _, rawCategory := range mapSliceField(payload, "categories") {
+		category := TeamLeaderCategory{
+			Name:         stringField(rawCategory, "name"),
+			DisplayName:  nonEmpty(stringField(rawCategory, "displayName"), stringField(rawCategory, "name")),
+			ShortName:    stringField(rawCategory, "shortDisplayName"),
+			Abbreviation: stringField(rawCategory, "abbreviation"),
+			Leaders:      []TeamLeaderEntry{},
+			Extensions: extensionsFromMap(rawCategory,
+				"name", "displayName", "shortDisplayName", "abbreviation", "leaders",
+			),
+		}
+
+		for _, rawLeader := range mapSliceField(rawCategory, "leaders") {
+			athleteRef := refFromField(rawLeader, "athlete")
+			entry := TeamLeaderEntry{
+				Order:         intField(rawLeader, "order"),
+				DisplayValue:  stringField(rawLeader, "displayValue"),
+				Value:         stringField(rawLeader, "value"),
+				AthleteID:     refIDs(athleteRef)["athleteId"],
+				AthleteName:   nonEmpty(stringField(mapField(rawLeader, "athlete"), "displayName"), stringField(mapField(rawLeader, "athlete"), "fullName")),
+				AthleteRef:    athleteRef,
+				TeamRef:       refFromField(rawLeader, "team"),
+				StatisticsRef: refFromField(rawLeader, "statistics"),
+				Runs:          stringField(rawLeader, "runs"),
+				Wickets:       stringField(rawLeader, "wickets"),
+				Overs:         stringField(rawLeader, "overs"),
+				Maidens:       stringField(rawLeader, "maidens"),
+				EconomyRate:   stringField(rawLeader, "economyRate"),
+				Balls:         stringField(rawLeader, "balls"),
+				Fours:         stringField(rawLeader, "fours"),
+				Sixes:         stringField(rawLeader, "sixes"),
+				Extensions: extensionsFromMap(rawLeader,
+					"order", "displayValue", "value", "athlete", "team", "statistics", "runs", "wickets", "overs", "maidens", "economyRate", "balls", "fours", "sixes",
+				),
+			}
+			category.Leaders = append(category.Leaders, entry)
+		}
+
+		leaders.Categories = append(leaders.Categories, category)
+	}
+
+	return leaders, nil
+}
+
+// NormalizeTeamRecordCategories maps team records pages into stat-category-like entries.
+func NormalizeTeamRecordCategories(data []byte) ([]StatCategory, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	items := mapSliceField(payload, "items")
+	if len(items) == 0 {
+		return []StatCategory{}, nil
+	}
+
+	categories := make([]StatCategory, 0, len(items))
+	for _, item := range items {
+		stats := make([]StatValue, 0)
+		for _, statRaw := range mapSliceField(item, "stats") {
+			stats = append(stats, StatValue{
+				Name:         stringField(statRaw, "name"),
+				DisplayName:  stringField(statRaw, "displayName"),
+				ShortName:    stringField(statRaw, "shortDisplayName"),
+				Description:  stringField(statRaw, "description"),
+				Abbreviation: stringField(statRaw, "abbreviation"),
+				DisplayValue: stringField(statRaw, "displayValue"),
+				Value:        statRaw["value"],
+				Type:         stringField(statRaw, "type"),
+				Extensions: extensionsFromMap(statRaw,
+					"name", "displayName", "shortDisplayName", "description", "abbreviation", "displayValue", "value", "type",
+				),
+			})
+		}
+
+		categories = append(categories, StatCategory{
+			Name:         stringField(item, "name"),
+			DisplayName:  nonEmpty(stringField(item, "displayName"), stringField(item, "name")),
+			ShortName:    stringField(item, "shortDisplayName"),
+			Abbreviation: stringField(item, "abbreviation"),
+			Summary:      stringField(item, "summary"),
+			Stats:        stats,
+			Extensions: extensionsFromMap(item,
+				"$ref", "id", "name", "displayName", "shortDisplayName", "abbreviation", "summary", "stats",
+			),
+		})
+	}
+
+	return categories, nil
+}
+
 // NormalizeLeague maps a league/root payload into the normalized league shape.
 func NormalizeLeague(data []byte) (*League, error) {
 	payload, err := decodePayloadMap(data)

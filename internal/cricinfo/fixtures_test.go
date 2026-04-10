@@ -78,6 +78,33 @@ func TestCuratedFixturesDecodeContracts(t *testing.T) {
 	if len(rosterEntries) == 0 {
 		t.Fatalf("expected roster entries in roster fixture")
 	}
+
+	rosterObjectBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "team-competitor", "roster-1147772-object.json"))
+	if err != nil {
+		t.Fatalf("read object-shaped roster fixture error: %v", err)
+	}
+	rosterObjectEntries, err := DecodeObjectCollection[map[string]any](rosterObjectBody, "entries")
+	if err != nil {
+		t.Fatalf("DecodeObjectCollection object-shaped roster fixture error: %v", err)
+	}
+	if len(rosterObjectEntries) == 0 {
+		t.Fatalf("expected roster entries in object-shaped roster fixture")
+	}
+
+	leadersBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "team-competitor", "leaders-789643.json"))
+	if err != nil {
+		t.Fatalf("read leaders fixture error: %v", err)
+	}
+	leaders, err := NormalizeTeamLeaders(leadersBody, Team{ID: "789643"}, TeamScopeMatch, "1529474")
+	if err != nil {
+		t.Fatalf("NormalizeTeamLeaders fixture error: %v", err)
+	}
+	if len(leaders.Categories) == 0 {
+		t.Fatalf("expected category-based leaders in leaders fixture")
+	}
+	if len(leaders.Categories[0].Leaders) == 0 {
+		t.Fatalf("expected at least one leader entry in leaders fixture")
+	}
 }
 
 func assertFixtureFamilyKeys(t *testing.T, family FixtureFamily, name string) {

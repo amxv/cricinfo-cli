@@ -36,6 +36,25 @@ func TestNormalizeCoreEntitiesFromFixtures(t *testing.T) {
 	}
 	assertJSONHasKeys(t, team, "id", "homeAway", "rosterRef")
 
+	rosterBody := mustReadFixtureFile(t, "team-competitor/roster-1147772.json")
+	rosterEntries, err := NormalizeTeamRosterEntries(rosterBody, Team{ID: "1147772"}, TeamScopeMatch, "1475396")
+	if err != nil {
+		t.Fatalf("NormalizeTeamRosterEntries array error: %v", err)
+	}
+	if len(rosterEntries) == 0 {
+		t.Fatalf("expected roster entries from array-shaped roster fixture")
+	}
+	assertJSONHasKeys(t, rosterEntries[0], "playerId", "playerRef", "linescoresRef")
+
+	rosterObjectBody := mustReadFixtureFile(t, "team-competitor/roster-1147772-object.json")
+	rosterObjectEntries, err := NormalizeTeamRosterEntries(rosterObjectBody, Team{ID: "1147772"}, TeamScopeMatch, "1475396")
+	if err != nil {
+		t.Fatalf("NormalizeTeamRosterEntries object error: %v", err)
+	}
+	if len(rosterObjectEntries) == 0 {
+		t.Fatalf("expected roster entries from object-shaped roster fixture")
+	}
+
 	root := mustReadFixtureFile(t, "root-discovery/root.json")
 	league, err := NormalizeLeague(root)
 	if err != nil {
@@ -112,6 +131,33 @@ func TestNormalizeCoreEntitiesFromFixtures(t *testing.T) {
 		t.Fatal("expected stat categories")
 	}
 	assertJSONHasKeys(t, categories[0], "name", "displayName", "stats")
+
+	scoreBody := mustReadFixtureFile(t, "team-competitor/scores-789643.json")
+	score, err := NormalizeTeamScore(scoreBody, Team{ID: "789643"}, TeamScopeMatch, "1529474")
+	if err != nil {
+		t.Fatalf("NormalizeTeamScore error: %v", err)
+	}
+	assertJSONHasKeys(t, score, "teamId", "displayValue", "value")
+
+	leadersBody := mustReadFixtureFile(t, "team-competitor/leaders-789643.json")
+	teamLeaders, err := NormalizeTeamLeaders(leadersBody, Team{ID: "789643"}, TeamScopeMatch, "1529474")
+	if err != nil {
+		t.Fatalf("NormalizeTeamLeaders error: %v", err)
+	}
+	assertJSONHasKeys(t, teamLeaders, "teamId", "matchId", "categories")
+	if len(teamLeaders.Categories) == 0 {
+		t.Fatalf("expected team leader categories")
+	}
+
+	recordsBody := mustReadFixtureFile(t, "team-competitor/records-789643.json")
+	recordCategories, err := NormalizeTeamRecordCategories(recordsBody)
+	if err != nil {
+		t.Fatalf("NormalizeTeamRecordCategories error: %v", err)
+	}
+	if len(recordCategories) == 0 {
+		t.Fatalf("expected team record categories")
+	}
+	assertJSONHasKeys(t, recordCategories[0], "name", "displayName", "stats")
 
 	partnershipBody := mustReadFixtureFile(t, "innings-fow-partnerships/partnerships.json")
 	partnerships, err := NormalizePartnerships(partnershipBody)
@@ -236,6 +282,28 @@ func TestRenderDeliveryJSONPreservesAdvancedFields(t *testing.T) {
 	assertMapHasKey(t, data, "bbbTimestamp")
 	assertMapHasKey(t, data, "xCoordinate")
 	assertMapHasKey(t, data, "yCoordinate")
+}
+
+func TestRenderTeamLeadersFixtureShowsBattingAndBowlingSections(t *testing.T) {
+	t.Parallel()
+
+	leadersBody := mustReadFixtureFile(t, "team-competitor/leaders-789643.json")
+	leaders, err := NormalizeTeamLeaders(leadersBody, Team{ID: "789643"}, TeamScopeMatch, "1529474")
+	if err != nil {
+		t.Fatalf("NormalizeTeamLeaders error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, NewDataResult(EntityTeamLeaders, leaders), RenderOptions{Format: "text"}); err != nil {
+		t.Fatalf("Render team leaders text error: %v", err)
+	}
+	text := buf.String()
+	if !strings.Contains(text, "Batting Leaders") {
+		t.Fatalf("expected Batting Leaders section in team leaders output, got %q", text)
+	}
+	if !strings.Contains(text, "Bowling Leaders") {
+		t.Fatalf("expected Bowling Leaders section in team leaders output, got %q", text)
+	}
 }
 
 func TestNormalizeEventAndCompetitionMatchDecoding(t *testing.T) {

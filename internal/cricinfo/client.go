@@ -189,8 +189,8 @@ func (c *Client) Fetch(ctx context.Context, ref string) (*Document, error) {
 		req.Header.Set("User-Agent", c.userAgent)
 
 		resp, doErr := c.httpClient.Do(req)
-		cancel()
 		if doErr != nil {
+			cancel()
 			if attempt < c.maxRetries && c.shouldRetryError(doErr, ctx) {
 				if sleepErr := c.sleep(ctx, c.retryDelay(attempt)); sleepErr != nil {
 					return nil, sleepErr
@@ -201,6 +201,7 @@ func (c *Client) Fetch(ctx context.Context, ref string) (*Document, error) {
 		}
 
 		body, readErr := io.ReadAll(resp.Body)
+		cancel()
 		_ = resp.Body.Close()
 		if readErr != nil {
 			return nil, fmt.Errorf("read response %q: %w", requestURL, readErr)

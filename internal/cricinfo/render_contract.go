@@ -18,6 +18,11 @@ const (
 	EntityMatchSituation EntityKind = "match_situation"
 	EntityPlayer         EntityKind = "player"
 	EntityTeam           EntityKind = "team"
+	EntityTeamRoster     EntityKind = "team_roster"
+	EntityTeamScore      EntityKind = "team_score"
+	EntityTeamLeaders    EntityKind = "team_leaders"
+	EntityTeamStatistics EntityKind = "team_statistics"
+	EntityTeamRecords    EntityKind = "team_records"
 	EntityLeague         EntityKind = "league"
 	EntitySeason         EntityKind = "season"
 	EntityStandingsGroup EntityKind = "standings_group"
@@ -205,6 +210,89 @@ type Team struct {
 	StatisticsRef string         `json:"statisticsRef,omitempty"`
 	RecordRef     string         `json:"recordRef,omitempty"`
 	LinescoresRef string         `json:"linescoresRef,omitempty"`
+	Extensions    map[string]any `json:"extensions,omitempty"`
+}
+
+// TeamScope indicates whether a team resource comes from global team endpoints or match-scoped competitor endpoints.
+type TeamScope string
+
+const (
+	TeamScopeGlobal TeamScope = "global"
+	TeamScopeMatch  TeamScope = "match"
+)
+
+// TeamRosterEntry is a normalized roster player entry with player-command bridge references.
+type TeamRosterEntry struct {
+	PlayerID      string         `json:"playerId,omitempty"`
+	PlayerRef     string         `json:"playerRef,omitempty"`
+	DisplayName   string         `json:"displayName,omitempty"`
+	TeamID        string         `json:"teamId,omitempty"`
+	TeamRef       string         `json:"teamRef,omitempty"`
+	MatchID       string         `json:"matchId,omitempty"`
+	Scope         TeamScope      `json:"scope,omitempty"`
+	Captain       bool           `json:"captain"`
+	Starter       bool           `json:"starter"`
+	Active        bool           `json:"active"`
+	ActiveName    string         `json:"activeName,omitempty"`
+	PositionRef   string         `json:"positionRef,omitempty"`
+	LinescoresRef string         `json:"linescoresRef,omitempty"`
+	StatisticsRef string         `json:"statisticsRef,omitempty"`
+	Extensions    map[string]any `json:"extensions,omitempty"`
+}
+
+// TeamScore is the normalized team score response.
+type TeamScore struct {
+	Ref          string         `json:"ref,omitempty"`
+	TeamID       string         `json:"teamId,omitempty"`
+	MatchID      string         `json:"matchId,omitempty"`
+	Scope        TeamScope      `json:"scope,omitempty"`
+	DisplayValue string         `json:"displayValue,omitempty"`
+	Value        string         `json:"value,omitempty"`
+	Place        string         `json:"place,omitempty"`
+	Source       string         `json:"source,omitempty"`
+	Winner       bool           `json:"winner"`
+	Extensions   map[string]any `json:"extensions,omitempty"`
+}
+
+// TeamLeaders groups category-based leaderboards for one team.
+type TeamLeaders struct {
+	Ref        string               `json:"ref,omitempty"`
+	TeamID     string               `json:"teamId,omitempty"`
+	MatchID    string               `json:"matchId,omitempty"`
+	Scope      TeamScope            `json:"scope,omitempty"`
+	Name       string               `json:"name,omitempty"`
+	Categories []TeamLeaderCategory `json:"categories,omitempty"`
+	Extensions map[string]any       `json:"extensions,omitempty"`
+}
+
+// TeamLeaderCategory is one leaderboard category (for example runs or wickets).
+type TeamLeaderCategory struct {
+	Name         string            `json:"name,omitempty"`
+	DisplayName  string            `json:"displayName,omitempty"`
+	ShortName    string            `json:"shortName,omitempty"`
+	Abbreviation string            `json:"abbreviation,omitempty"`
+	Leaders      []TeamLeaderEntry `json:"leaders,omitempty"`
+	Extensions   map[string]any    `json:"extensions,omitempty"`
+}
+
+// TeamLeaderEntry is one player row within a team leaderboard category.
+type TeamLeaderEntry struct {
+	Order         int            `json:"order,omitempty"`
+	DisplayValue  string         `json:"displayValue,omitempty"`
+	Value         string         `json:"value,omitempty"`
+	AthleteID     string         `json:"athleteId,omitempty"`
+	AthleteName   string         `json:"athleteName,omitempty"`
+	AthleteRef    string         `json:"athleteRef,omitempty"`
+	TeamRef       string         `json:"teamRef,omitempty"`
+	StatisticsRef string         `json:"statisticsRef,omitempty"`
+	Runs          string         `json:"runs,omitempty"`
+	Wickets       string         `json:"wickets,omitempty"`
+	Overs         string         `json:"overs,omitempty"`
+	Maidens       string         `json:"maidens,omitempty"`
+	EconomyRate   string         `json:"economyRate,omitempty"`
+	Balls         string         `json:"balls,omitempty"`
+	Fours         string         `json:"fours,omitempty"`
+	Sixes         string         `json:"sixes,omitempty"`
 	Extensions    map[string]any `json:"extensions,omitempty"`
 }
 
@@ -430,6 +518,16 @@ func kindPlural(kind EntityKind) string {
 		return "players"
 	case EntityTeam:
 		return "teams"
+	case EntityTeamRoster:
+		return "team roster entries"
+	case EntityTeamScore:
+		return "team scores"
+	case EntityTeamLeaders:
+		return "team leaderboards"
+	case EntityTeamStatistics:
+		return "team statistics categories"
+	case EntityTeamRecords:
+		return "team record categories"
 	case EntityLeague:
 		return "leagues"
 	case EntitySeason:

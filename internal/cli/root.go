@@ -70,14 +70,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 			"cricinfo search --help",
 		},
 	))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"teams",
-		"Team and competitor views including roster, leaders, and records.",
-		[]string{
-			"cricinfo teams --help",
-			"cricinfo matches --help",
-		},
-	))
+	root.AddCommand(newTeamsCommand(opts))
 	root.AddCommand(newPlaceholderGroupCommand(
 		"leagues",
 		"League-level discovery for events, seasons, and calendars.",

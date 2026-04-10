@@ -182,6 +182,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatMatchScorecard(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityTeamLeaders {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Team Leaders")
+			lines = append(lines, formatTeamLeaders(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
@@ -312,6 +321,22 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 	case EntityTeam:
 		name := firstNonEmpty(valueString(entity, "name"), valueString(entity, "shortName"), valueString(entity, "id"))
 		return joinParts(name, bracket(valueString(entity, "homeAway")))
+	case EntityTeamRoster:
+		name := firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "playerId"), valueString(entity, "athleteId"))
+		badges := []string{}
+		if valueString(entity, "captain") == "true" {
+			badges = append(badges, "captain")
+		}
+		if valueString(entity, "active") == "true" {
+			badges = append(badges, "active")
+		}
+		return joinParts(name, valueString(entity, "playerRef"), strings.Join(badges, ", "))
+	case EntityTeamScore:
+		return joinParts(valueString(entity, "displayValue"), valueString(entity, "value"), bracket(valueString(entity, "source")))
+	case EntityTeamLeaders:
+		return joinParts(valueString(entity, "name"), fmt.Sprintf("%d categories", len(sliceValue(entity, "categories"))))
+	case EntityTeamStatistics, EntityTeamRecords:
+		return joinParts(firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "name")), fmt.Sprintf("%d stats", len(sliceValue(entity, "stats"))))
 	case EntityLeague:
 		return joinParts(firstNonEmpty(valueString(entity, "name"), valueString(entity, "id")), bracket(valueString(entity, "slug")))
 	case EntitySeason:
@@ -358,6 +383,8 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 		order = []string{"id", "displayName", "fullName", "battingName", "fieldingName", "teamRef", "newsRef"}
 	case EntityTeam:
 		order = []string{"id", "name", "shortName", "homeAway", "scoreRef", "rosterRef", "leadersRef"}
+	case EntityTeamScore:
+		order = []string{"teamId", "matchId", "scope", "displayValue", "value", "winner", "source"}
 	case EntityLeague:
 		order = []string{"id", "name", "slug"}
 	case EntitySeason:
@@ -550,6 +577,142 @@ func formatPartnershipCards(cards []any) []string {
 		}
 	}
 	return lines
+}
+
+func formatTeamLeaders(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+
+	if teamID := valueString(entity, "teamId"); teamID != "" {
+		lines = append(lines, "Team: "+teamID)
+	}
+	if matchID := valueString(entity, "matchId"); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+
+	categories := sliceValue(entity, "categories")
+	if len(categories) == 0 {
+		lines = append(lines, "No leaderboard categories available.")
+		return lines
+	}
+
+	batting := make([]string, 0)
+	bowling := make([]string, 0)
+	other := make([]string, 0)
+
+	for _, rawCategory := range categories {
+		category, ok := rawCategory.(map[string]any)
+		if !ok {
+			continue
+		}
+		role := leaderCategoryRole(category)
+		rows := formatTeamLeaderCategory(category, role)
+		switch role {
+		case "batting":
+			batting = append(batting, rows...)
+		case "bowling":
+			bowling = append(bowling, rows...)
+		default:
+			other = append(other, rows...)
+		}
+	}
+
+	if len(batting) > 0 {
+		lines = append(lines, "Batting Leaders")
+		lines = append(lines, batting...)
+	}
+	if len(bowling) > 0 {
+		lines = append(lines, "Bowling Leaders")
+		lines = append(lines, bowling...)
+	}
+	if len(other) > 0 {
+		lines = append(lines, "Other Leaders")
+		lines = append(lines, other...)
+	}
+	if len(batting) == 0 && len(bowling) == 0 && len(other) == 0 {
+		lines = append(lines, "No leaderboard categories available.")
+	}
+
+	return lines
+}
+
+func formatTeamLeaderCategory(category map[string]any, role string) []string {
+	lines := make([]string, 0, 24)
+	name := firstNonEmpty(valueString(category, "displayName"), valueString(category, "name"))
+	if name == "" {
+		name = "Leaders"
+	}
+	lines = append(lines, name)
+
+	leaders := sliceValue(category, "leaders")
+	for idx, rawLeader := range leaders {
+		leader, ok := rawLeader.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		player := firstNonEmpty(valueString(leader, "athleteName"), valueString(leader, "athleteId"), valueString(leader, "athleteRef"))
+		primary := valueString(leader, "displayValue")
+		if primary == "" {
+			primary = valueString(leader, "value")
+		}
+
+		score := ""
+		switch role {
+		case "batting":
+			if primary != "" {
+				score = primary + " runs"
+			}
+		case "bowling":
+			if primary != "" {
+				score = primary + " wkts"
+			}
+		default:
+			score = primary
+		}
+
+		extras := []string{}
+		if role == "batting" {
+			if balls := valueString(leader, "balls"); balls != "" {
+				extras = append(extras, balls+" balls")
+			}
+			if fours := valueString(leader, "fours"); fours != "" {
+				extras = append(extras, fours+"x4")
+			}
+			if sixes := valueString(leader, "sixes"); sixes != "" {
+				extras = append(extras, sixes+"x6")
+			}
+		}
+		if role == "bowling" {
+			if overs := valueString(leader, "overs"); overs != "" {
+				extras = append(extras, overs+" ov")
+			}
+			if runs := valueString(leader, "runs"); runs != "" {
+				extras = append(extras, runs+" runs")
+			}
+			if economy := valueString(leader, "economyRate"); economy != "" {
+				extras = append(extras, "econ "+economy)
+			}
+		}
+
+		row := joinParts(player, score, strings.Join(extras, ", "))
+		if row == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  %d. %s", idx+1, row))
+	}
+
+	return lines
+}
+
+func leaderCategoryRole(category map[string]any) string {
+	name := strings.ToLower(strings.TrimSpace(firstNonEmpty(valueString(category, "name"), valueString(category, "displayName"))))
+	if strings.Contains(name, "run") || strings.Contains(name, "bat") {
+		return "batting"
+	}
+	if strings.Contains(name, "wicket") || strings.Contains(name, "bowl") {
+		return "bowling"
+	}
+	return "other"
 }
 
 func mapsKeys(m map[string]any) []string {
