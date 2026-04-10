@@ -14,14 +14,14 @@ Maintainer notes for this template repository.
 ```bash
 make check
 make build
-./dist/cricinfo-cli --help
+./dist/cricinfo --help
 ```
 
 Install command locally:
 
 ```bash
 make install-local
-cricinfo-cli --help
+cricinfo --help
 ```
 
 ## Release process

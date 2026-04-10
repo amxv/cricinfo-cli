@@ -6,7 +6,7 @@ const https = require("node:https");
 const { spawnSync } = require("node:child_process");
 
 const pkg = require("../package.json");
-const cliName = pkg.config?.cliBinaryName || "cricinfo-cli";
+const cliName = pkg.config?.cliBinaryName || "cricinfo";
 
 const repoURL = pkg.repository?.url || "";
 const repoMatch = repoURL.match(/github\.com[:/](.+?)\/(.+?)(?:\.git)?$/);

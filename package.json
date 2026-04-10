@@ -1,5 +1,5 @@
 {
-  "name": "@amxv/cricinfo-cli",
+  "name": "@amxv/cricinfo",
   "version": "0.1.0",
   "description": "Cricinfo command line interface",
   "license": "MIT",
@@ -13,13 +13,13 @@
     "url": "https://github.com/amxv/cricinfo-cli/issues"
   },
   "bin": {
-    "cricinfo-cli": "bin/cricinfo-cli.js"
+    "cricinfo": "bin/cricinfo.js"
   },
   "config": {
-    "cliBinaryName": "cricinfo-cli"
+    "cliBinaryName": "cricinfo"
   },
   "files": [
-    "bin/cricinfo-cli.js",
+    "bin/cricinfo.js",
     "scripts/postinstall.js",
     "cmd",
     "internal",
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "test": "node --check bin/cricinfo-cli.js && node --check scripts/postinstall.js",
+    "test": "node --check bin/cricinfo.js && node --check scripts/postinstall.js",
     "lint": "npm run test"
   },
   "engines": {

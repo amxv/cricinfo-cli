@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 GO ?= go
 GOFMT ?= gofmt
-BIN_NAME ?= cricinfo-cli
+BIN_NAME ?= cricinfo
 CMD_PATH ?= ./cmd/$(BIN_NAME)
 DIST_DIR ?= dist
 BIN_PATH ?= $(DIST_DIR)/$(BIN_NAME)
@@ -12,7 +12,7 @@ LDFLAGS ?= -s -w -X github.com/amxv/cricinfo-cli/internal/buildinfo.Version=$(if
 .PHONY: help fmt test vet lint check build build-all install-local clean release-tag
 
 help:
-	@echo "cricinfo-cli command runner"
+	@echo "cricinfo command runner"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make fmt          - format Go files"
@@ -20,9 +20,9 @@ help:
 	@echo "  make vet          - run go vet ./..."
 	@echo "  make lint         - run Node script checks"
 	@echo "  make check        - fmt + test + vet + lint"
-	@echo "  make build        - build local binary to dist/cricinfo-cli"
+	@echo "  make build        - build local binary to dist/cricinfo"
 	@echo "  make build-all    - build release binaries for 5 target platforms"
-	@echo "  make install-local- install CLI to ~/.local/bin/cricinfo-cli"
+	@echo "  make install-local- install CLI to ~/.local/bin/cricinfo"
 	@echo "  make clean        - remove dist artifacts"
 	@echo "  make release-tag  - create and push git tag (requires VERSION=x.y.z)"
 

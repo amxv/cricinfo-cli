@@ -8,7 +8,7 @@ import (
 	"github.com/amxv/cricinfo-cli/internal/buildinfo"
 )
 
-const commandName = "cricinfo-cli"
+const commandName = "cricinfo"
 
 var version = buildinfo.CurrentVersion()
 
@@ -59,32 +59,32 @@ func isHelpArg(v string) bool {
 
 func printRootHelp(w io.Writer) {
 	writeLines(w,
-		"cricinfo-cli - Go CLI template",
+		"cricinfo - Go CLI template",
 		"",
 		"Usage:",
-		"  cricinfo-cli [--version]",
-		"  cricinfo-cli <command> [arguments]",
+		"  cricinfo [--version]",
+		"  cricinfo <command> [arguments]",
 		"",
 		"Commands:",
 		"  hello [name]    print a greeting",
 		"",
 		"Examples:",
-		"  cricinfo-cli --version",
-		"  cricinfo-cli hello",
-		"  cricinfo-cli hello agent",
+		"  cricinfo --version",
+		"  cricinfo hello",
+		"  cricinfo hello agent",
 	)
 }
 
 func printHelloHelp(w io.Writer) {
 	writeLines(w,
-		"cricinfo-cli hello - print a greeting",
+		"cricinfo hello - print a greeting",
 		"",
 		"Usage:",
-		"  cricinfo-cli hello [name]",
+		"  cricinfo hello [name]",
 		"",
 		"Examples:",
-		"  cricinfo-cli hello",
-		"  cricinfo-cli hello Alice",
+		"  cricinfo hello",
+		"  cricinfo hello Alice",
 	)
 }
 
