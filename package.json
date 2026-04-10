@@ -24,6 +24,7 @@
     "cmd",
     "internal",
     "go.mod",
+    "go.sum",
     "README.md",
     "LICENSE",
     "AGENTS.md",

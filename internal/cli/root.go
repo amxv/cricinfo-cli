@@ -117,12 +117,18 @@ func normalizeCommandError(err error) error {
 
 func rootLongDescription() string {
 	return strings.Join([]string{
-		"Domain-driven Cricinfo CLI for exploring matches, players, teams, and leagues.",
+		"Domain-driven Cricinfo CLI for real-time match, player, team, league, season, and analysis workflows.",
 		"",
-		"Next steps:",
-		"  cricinfo matches --help",
-		"  cricinfo players --help",
-		"  cricinfo search --help",
+		"Quick drill-down:",
+		"  cricinfo matches list",
+		"  cricinfo players profile 1361257",
+		"  cricinfo teams roster 789643 --match 1529474",
+		"  cricinfo leagues seasons 19138",
+		"  cricinfo analysis bowling --metric economy --scope match:1529474",
+		"",
+		"JSON output for agents:",
+		"  cricinfo matches show 1529474 --format json",
+		"  cricinfo analysis dismissals --league 19138 --seasons 2025 --format json",
 	}, "\n")
 }
 

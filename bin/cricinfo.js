@@ -5,7 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const pkg = require("../package.json");
-const cliName = pkg.config?.cliBinaryName || "cricinfo-cli";
+const cliName = resolveCLIName(pkg);
 const executableName = process.platform === "win32" ? `${cliName}.exe` : `${cliName}-bin`;
 const executablePath = path.join(__dirname, executableName);
 
@@ -26,3 +26,19 @@ if (child.signal) {
 }
 
 process.exit(child.status ?? 1);
+
+function resolveCLIName(packageJSON) {
+  const configured = `${packageJSON?.config?.cliBinaryName || ""}`.trim();
+  if (configured) {
+    return configured;
+  }
+
+  if (packageJSON?.bin && typeof packageJSON.bin === "object") {
+    const names = Object.keys(packageJSON.bin);
+    if (names.length > 0 && `${names[0]}`.trim()) {
+      return `${names[0]}`.trim();
+    }
+  }
+
+  return "cricinfo";
+}
