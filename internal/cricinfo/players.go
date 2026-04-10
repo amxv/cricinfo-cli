@@ -210,7 +210,7 @@ func (s *PlayerService) MatchStats(ctx context.Context, playerQuery, matchQuery 
 		EventID:       contextData.match.EventID,
 		LeagueID:      contextData.match.LeagueID,
 		TeamID:        contextData.team.ID,
-		TeamName:      nonEmpty(contextData.team.ShortName, contextData.team.Name, contextData.team.ID),
+		TeamName:      teamDisplayLabel(contextData.team),
 		StatisticsRef: resolved.CanonicalRef,
 		LinescoresRef: rosterPlayerLinescoresRef(contextData.match, contextData.team, contextData.roster),
 		Batting:       batting,
@@ -291,7 +291,7 @@ func (s *PlayerService) Innings(ctx context.Context, playerQuery, matchQuery str
 			EventID:       contextData.match.EventID,
 			LeagueID:      contextData.match.LeagueID,
 			TeamID:        contextData.team.ID,
-			TeamName:      nonEmpty(contextData.team.ShortName, contextData.team.Name, contextData.team.ID),
+			TeamName:      teamDisplayLabel(contextData.team),
 			InningsNumber: inningsNumber,
 			Period:        period,
 			Order:         intField(row, "order"),
@@ -385,7 +385,7 @@ func (s *PlayerService) Dismissals(ctx context.Context, playerQuery, matchQuery 
 			EventID:         contextData.match.EventID,
 			LeagueID:        contextData.match.LeagueID,
 			TeamID:          nonEmpty(wicketMeta.team.ID, contextData.team.ID),
-			TeamName:        nonEmpty(wicketMeta.team.ShortName, wicketMeta.team.Name, contextData.team.ShortName, contextData.team.Name, contextData.team.ID),
+			TeamName:        nonEmpty(teamDisplayLabel(wicketMeta.team), teamDisplayLabel(contextData.team), "Unknown Team"),
 			InningsNumber:   wicketMeta.innings.InningsNumber,
 			Period:          wicketMeta.innings.Period,
 			WicketNumber:    wicketMeta.wicket.Number,
@@ -591,6 +591,7 @@ func (s *PlayerService) resolvePlayerLookup(ctx context.Context, query string, o
 			Message: fmt.Sprintf("normalize player profile %q: %v", resolved.CanonicalRef, err),
 		}
 	}
+	s.enrichPlayerProfile(ctx, player)
 
 	return &playerLookup{
 		entity:    entity,
@@ -600,6 +601,43 @@ func (s *PlayerService) resolvePlayerLookup(ctx context.Context, query string, o
 		statsRef:  "/athletes/" + strings.TrimSpace(player.ID) + "/statistics",
 		statsKind: kind,
 	}, nil
+}
+
+func (s *PlayerService) enrichPlayerProfile(ctx context.Context, player *Player) {
+	if s == nil || s.resolver == nil || player == nil {
+		return
+	}
+	if player.Team != nil {
+		enriched := s.enrichPlayerAffiliation(ctx, *player.Team)
+		player.Team = &enriched
+	}
+	for i := range player.MajorTeams {
+		player.MajorTeams[i] = s.enrichPlayerAffiliation(ctx, player.MajorTeams[i])
+	}
+}
+
+func (s *PlayerService) enrichPlayerAffiliation(ctx context.Context, affiliation PlayerAffiliation) PlayerAffiliation {
+	teamID := strings.TrimSpace(affiliation.ID)
+	if teamID == "" {
+		teamID = strings.TrimSpace(refIDs(affiliation.Ref)["teamId"])
+	}
+	if teamID == "" {
+		return affiliation
+	}
+	affiliation.ID = teamID
+	if strings.TrimSpace(affiliation.Name) != "" {
+		return affiliation
+	}
+	if s.resolver != nil {
+		_ = s.resolver.seedTeamByID(ctx, teamID, "", "")
+		if indexed, ok := s.resolver.index.FindByID(EntityTeam, teamID); ok {
+			affiliation.Name = nonEmpty(indexed.Name, indexed.ShortName)
+			if strings.TrimSpace(affiliation.Ref) == "" {
+				affiliation.Ref = indexed.Ref
+			}
+		}
+	}
+	return affiliation
 }
 
 func (s *PlayerService) resolvePlayerMatchContext(
@@ -660,6 +698,7 @@ func (s *PlayerService) resolvePlayerMatchContext(
 		}
 		return nil, &result
 	}
+	team = s.enrichTeamIdentityFromIndex(team)
 
 	playerID := strings.TrimSpace(roster.PlayerID)
 	if playerID == "" {
@@ -674,7 +713,8 @@ func (s *PlayerService) resolvePlayerMatchContext(
 		return nil, &result
 	}
 
-	playerName := nonEmpty(roster.DisplayName, firstNonEmptyString(candidateNames...), playerID)
+	roster = s.enrichRosterEntryFromIndex(roster)
+	playerName := nonEmpty(roster.DisplayName, firstNonEmptyString(candidateNames...), strings.TrimSpace(playerQuery), "Unknown Player")
 	playerEntity := IndexedEntity{Kind: EntityPlayer, ID: playerID, Name: playerName}
 	if len(searchResult.Entities) > 0 {
 		playerEntity = searchResult.Entities[0]
@@ -745,8 +785,13 @@ func (s *PlayerService) resolveMatchForPlayer(
 		}
 		return nil, nil, &result
 	}
-
-	return match, compactWarnings(searchResult.Warnings), nil
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	helper := &MatchService{client: s.client, resolver: s.resolver}
+	warnings := append([]string{}, searchResult.Warnings...)
+	warnings = append(warnings, helper.hydrateMatch(ctx, match, statusCache, teamCache, scoreCache)...)
+	return match, compactWarnings(warnings), nil
 }
 
 func (s *PlayerService) findPlayerRosterEntry(
@@ -756,7 +801,9 @@ func (s *PlayerService) findPlayerRosterEntry(
 	candidateIDs []string,
 	candidateNames []string,
 ) (Team, TeamRosterEntry, []string, bool) {
-	normalizedQuery := strings.ToLower(strings.TrimSpace(playerQuery))
+	normalizedQuery := normalizeAlias(playerQuery)
+	queryTokens := strings.Fields(normalizedQuery)
+	useCandidateIDs := isNumeric(strings.TrimSpace(playerQuery)) || isKnownRefQuery(strings.TrimSpace(playerQuery))
 	idSet := map[string]struct{}{}
 	for _, id := range candidateIDs {
 		id = strings.TrimSpace(id)
@@ -765,16 +812,10 @@ func (s *PlayerService) findPlayerRosterEntry(
 		}
 		idSet[id] = struct{}{}
 	}
-	nameSet := map[string]struct{}{}
-	for _, name := range candidateNames {
-		name = strings.ToLower(strings.TrimSpace(name))
-		if name == "" {
-			continue
-		}
-		nameSet[name] = struct{}{}
-	}
-
 	warnings := make([]string, 0)
+	bestScore := 0
+	var bestTeam Team
+	var bestEntry TeamRosterEntry
 	for _, team := range match.Teams {
 		rosterRef := nonEmpty(strings.TrimSpace(team.RosterRef), competitorSubresourceRef(match, team.ID, "roster"))
 		if rosterRef == "" {
@@ -794,21 +835,97 @@ func (s *PlayerService) findPlayerRosterEntry(
 		}
 
 		for _, entry := range entries {
-			if _, ok := idSet[strings.TrimSpace(entry.PlayerID)]; ok {
-				return team, entry, compactWarnings(warnings), true
+			entry = s.enrichRosterEntryFromIndex(entry)
+			playerID := strings.TrimSpace(entry.PlayerID)
+
+			score := 0
+			if useCandidateIDs {
+				if _, ok := idSet[playerID]; ok && playerID != "" {
+					score = 5000
+				}
+			}
+			if !useCandidateIDs && normalizedQuery != "" {
+				if normalizedID := normalizeAlias(playerID); normalizedID != "" && normalizedID == normalizedQuery {
+					score = 5000
+				}
 			}
 
-			display := strings.ToLower(strings.TrimSpace(entry.DisplayName))
-			if normalizedQuery != "" && display != "" && display == normalizedQuery {
-				return team, entry, compactWarnings(warnings), true
+			aliases := compactWarnings([]string{
+				entry.DisplayName,
+				playerID,
+				refIDs(entry.PlayerRef)["athleteId"],
+			})
+			for _, alias := range aliases {
+				normalizedAlias := normalizeAlias(alias)
+				if normalizedAlias == "" || normalizedQuery == "" {
+					continue
+				}
+				score = maxInt(score, aliasMatchScore(normalizedAlias, normalizedQuery, queryTokens))
 			}
-			if _, ok := nameSet[display]; ok && display != "" {
-				return team, entry, compactWarnings(warnings), true
+
+			if score > bestScore {
+				bestScore = score
+				bestTeam = team
+				bestEntry = entry
 			}
 		}
 	}
 
+	if bestScore >= 300 {
+		return bestTeam, bestEntry, compactWarnings(warnings), true
+	}
 	return Team{}, TeamRosterEntry{}, compactWarnings(warnings), false
+}
+
+func (s *PlayerService) enrichRosterEntryFromIndex(entry TeamRosterEntry) TeamRosterEntry {
+	if s == nil || s.resolver == nil || s.resolver.index == nil {
+		return entry
+	}
+	playerID := strings.TrimSpace(entry.PlayerID)
+	if playerID == "" {
+		return entry
+	}
+	player, ok := s.resolver.index.FindByID(EntityPlayer, playerID)
+	if !ok {
+		return entry
+	}
+	if strings.TrimSpace(entry.DisplayName) == "" {
+		entry.DisplayName = nonEmpty(player.Name, player.ShortName)
+	}
+	if strings.TrimSpace(entry.PlayerRef) == "" {
+		entry.PlayerRef = strings.TrimSpace(player.Ref)
+	}
+	return entry
+}
+
+func (s *PlayerService) enrichTeamIdentityFromIndex(team Team) Team {
+	if s == nil || s.resolver == nil || s.resolver.index == nil {
+		return team
+	}
+	teamID := strings.TrimSpace(team.ID)
+	if teamID == "" {
+		teamID = strings.TrimSpace(refIDs(team.Ref)["teamId"])
+	}
+	if teamID == "" {
+		teamID = strings.TrimSpace(refIDs(team.Ref)["competitorId"])
+	}
+	if teamID == "" {
+		return team
+	}
+	indexed, ok := s.resolver.index.FindByID(EntityTeam, teamID)
+	if !ok {
+		return team
+	}
+	if strings.TrimSpace(team.Name) == "" {
+		team.Name = strings.TrimSpace(indexed.Name)
+	}
+	if strings.TrimSpace(team.ShortName) == "" {
+		team.ShortName = strings.TrimSpace(indexed.ShortName)
+	}
+	if strings.TrimSpace(team.Ref) == "" {
+		team.Ref = strings.TrimSpace(indexed.Ref)
+	}
+	return team
 }
 
 func rosterPlayerStatisticsRef(match Match, team Team, entry TeamRosterEntry) string {
@@ -1064,9 +1181,21 @@ func (s *PlayerService) fetchPlayerDeliveries(
 		return nil, nil, nil, fmt.Errorf("decode details page %q: %w", resolved.CanonicalRef, err)
 	}
 
-	deliveries := make([]DeliveryEvent, 0, len(page.Items))
 	warnings := make([]string, 0)
-	for _, item := range page.Items {
+	pageItems := append([]Ref(nil), page.Items...)
+	if page.PageCount > 1 {
+		helper := &MatchService{client: s.client, resolver: s.resolver}
+		extraItems, pageWarnings, pageErr := helper.resolvePageRefs(ctx, resolved)
+		if pageErr != nil {
+			warnings = append(warnings, pageErr.Error())
+		} else {
+			pageItems = extraItems
+			warnings = append(warnings, pageWarnings...)
+		}
+	}
+
+	deliveries := make([]DeliveryEvent, 0, len(pageItems))
+	for _, item := range pageItems {
 		itemRef := strings.TrimSpace(item.URL)
 		if itemRef == "" {
 			warnings = append(warnings, "skip detail item with empty ref")
@@ -1176,6 +1305,10 @@ func containsString(values []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func teamDisplayLabel(team Team) string {
+	return nonEmpty(strings.TrimSpace(team.ShortName), strings.TrimSpace(team.Name), "Unknown Team")
 }
 
 func firstNonZero(values ...int) int {

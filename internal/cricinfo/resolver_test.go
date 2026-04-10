@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -130,6 +131,54 @@ func TestResolverSearchReusesPersistedEventSeedToAvoidTransportChurn(t *testing.
 
 	if got := eventsHits.Load(); got != firstEventsHits {
 		t.Fatalf("expected second search to reuse cached /events seed (hits=%d), got %d", firstEventsHits, got)
+	}
+}
+
+func TestResolverSearchHydratesNamelessCachedPlayerByID(t *testing.T) {
+	t.Parallel()
+
+	server, _ := newResolverFixtureServer(t)
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:    server.URL,
+		MaxRetries: 0,
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	resolver, err := NewResolver(ResolverConfig{
+		Client:       client,
+		IndexPath:    filepath.Join(t.TempDir(), "resolver-index.json"),
+		EventSeedTTL: time.Hour,
+		MaxEventSeed: 5,
+	})
+	if err != nil {
+		t.Fatalf("NewResolver error: %v", err)
+	}
+	defer func() {
+		_ = resolver.Close()
+	}()
+
+	if err := resolver.index.Upsert(IndexedEntity{
+		Kind:      EntityPlayer,
+		ID:        "51",
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed nameless player error: %v", err)
+	}
+
+	result, err := resolver.Search(context.Background(), EntityPlayer, "51", ResolveOptions{Limit: 3})
+	if err != nil {
+		t.Fatalf("Search player by id error: %v", err)
+	}
+	if len(result.Entities) == 0 {
+		t.Fatalf("expected player search results")
+	}
+	if strings.TrimSpace(result.Entities[0].Name) == "" {
+		t.Fatalf("expected resolver to hydrate nameless cached player, got %+v", result.Entities[0])
 	}
 }
 

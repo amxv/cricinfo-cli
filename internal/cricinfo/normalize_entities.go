@@ -206,13 +206,22 @@ func NormalizeTeamRosterEntries(data []byte, team Team, scope TeamScope, matchID
 
 	normalized := make([]TeamRosterEntry, 0, len(entries))
 	for _, entry := range entries {
+		athlete := mapField(entry, "athlete")
 		athleteRef := refFromField(entry, "athlete")
 		playerID := nonEmpty(stringField(entry, "playerId"), refIDs(athleteRef)["athleteId"], refIDs(stringField(entry, "$ref"))["athleteId"])
+		displayName := nonEmpty(
+			stringField(athlete, "displayName"),
+			stringField(athlete, "fullName"),
+			stringField(athlete, "name"),
+			stringField(entry, "displayName"),
+			stringField(entry, "fullName"),
+			stringField(entry, "name"),
+		)
 
 		normalized = append(normalized, TeamRosterEntry{
 			PlayerID:      playerID,
 			PlayerRef:     athleteRef,
-			DisplayName:   nonEmpty(stringField(mapField(entry, "athlete"), "displayName"), stringField(mapField(entry, "athlete"), "fullName")),
+			DisplayName:   displayName,
 			TeamID:        team.ID,
 			TeamRef:       team.Ref,
 			MatchID:       strings.TrimSpace(matchID),
@@ -294,9 +303,10 @@ func NormalizeTeamLeaders(data []byte, team Team, scope TeamScope, matchID strin
 	leaders := &TeamLeaders{
 		Ref:        stringField(payload, "$ref"),
 		TeamID:     team.ID,
+		TeamName:   nonEmpty(team.ShortName, team.Name),
 		MatchID:    strings.TrimSpace(matchID),
 		Scope:      scope,
-		Name:       nonEmpty(stringField(payload, "displayName"), stringField(payload, "name"), "Leaders"),
+		Name:       nonEmpty(stringField(payload, "displayName"), stringField(payload, "name"), nonEmpty(team.ShortName, team.Name), "Leaders"),
 		Categories: []TeamLeaderCategory{},
 		Extensions: extensionsFromMap(payload, "$ref", "id", "name", "displayName", "abbreviation", "categories"),
 	}
@@ -314,13 +324,26 @@ func NormalizeTeamLeaders(data []byte, team Team, scope TeamScope, matchID strin
 		}
 
 		for _, rawLeader := range mapSliceField(rawCategory, "leaders") {
+			athlete := mapField(rawLeader, "athlete")
 			athleteRef := refFromField(rawLeader, "athlete")
+			athleteID := nonEmpty(
+				stringField(rawLeader, "athleteId"),
+				stringField(athlete, "id"),
+				refIDs(athleteRef)["athleteId"],
+			)
+			athleteName := nonEmpty(
+				stringField(athlete, "displayName"),
+				stringField(athlete, "fullName"),
+				stringField(athlete, "name"),
+				stringField(rawLeader, "athleteDisplayName"),
+				stringField(rawLeader, "name"),
+			)
 			entry := TeamLeaderEntry{
 				Order:         intField(rawLeader, "order"),
 				DisplayValue:  stringField(rawLeader, "displayValue"),
 				Value:         stringField(rawLeader, "value"),
-				AthleteID:     refIDs(athleteRef)["athleteId"],
-				AthleteName:   nonEmpty(stringField(mapField(rawLeader, "athlete"), "displayName"), stringField(mapField(rawLeader, "athlete"), "fullName")),
+				AthleteID:     athleteID,
+				AthleteName:   athleteName,
 				AthleteRef:    athleteRef,
 				TeamRef:       refFromField(rawLeader, "team"),
 				StatisticsRef: refFromField(rawLeader, "statistics"),
@@ -645,9 +668,15 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 	over := mapField(payload, "over")
 	playType := mapField(payload, "playType")
 	dismissal := mapField(payload, "dismissal")
-	batsmanRef := nestedRef(payload, "batsman", "athlete")
-	bowlerRef := nestedRef(payload, "bowler", "athlete")
-	fielderRef := nestedRef(payload, "dismissal", "fielder", "athlete")
+	batsman := mapField(payload, "batsman")
+	bowler := mapField(payload, "bowler")
+	fielder := mapField(dismissal, "fielder")
+	batsmanRef := nonEmpty(nestedRef(payload, "batsman", "athlete"), refFromField(payload, "batsman"))
+	bowlerRef := nonEmpty(nestedRef(payload, "bowler", "athlete"), refFromField(payload, "bowler"))
+	fielderRef := nonEmpty(nestedRef(payload, "dismissal", "fielder", "athlete"), nestedRef(payload, "dismissal", "fielder"))
+	batsmanID := nonEmpty(stringField(batsman, "playerId"), stringField(batsman, "id"), refIDs(batsmanRef)["athleteId"])
+	bowlerID := nonEmpty(stringField(bowler, "playerId"), stringField(bowler, "id"), refIDs(bowlerRef)["athleteId"])
+	fielderID := nonEmpty(stringField(fielder, "playerId"), stringField(fielder, "id"), refIDs(fielderRef)["athleteId"])
 	teamRef := refFromField(payload, "team")
 	teamIDs := refIDs(teamRef)
 	athletePlayerIDs := extractAthletePlayerIDs(payload)
@@ -674,9 +703,9 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 		AwayScore:        stringField(payload, "awayScore"),
 		BatsmanRef:       batsmanRef,
 		BowlerRef:        bowlerRef,
-		BatsmanPlayerID:  refIDs(batsmanRef)["athleteId"],
-		BowlerPlayerID:   refIDs(bowlerRef)["athleteId"],
-		FielderPlayerID:  refIDs(fielderRef)["athleteId"],
+		BatsmanPlayerID:  batsmanID,
+		BowlerPlayerID:   bowlerID,
+		FielderPlayerID:  fielderID,
 		AthletePlayerIDs: athletePlayerIDs,
 		PlayType:         playType,
 		Dismissal:        dismissal,
@@ -701,15 +730,23 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 }
 
 func extractAthletePlayerIDs(payload map[string]any) []string {
-	entries := mapSliceField(payload, "athletesInvolved")
-	if len(entries) == 0 {
+	if payload == nil {
+		return nil
+	}
+	rawItems, ok := payload["athletesInvolved"].([]any)
+	if !ok || len(rawItems) == 0 {
 		return nil
 	}
 
 	seen := map[string]struct{}{}
-	out := make([]string, 0, len(entries))
-	for _, item := range entries {
-		ref := stringField(item, "$ref")
+	out := make([]string, 0, len(rawItems))
+	for _, raw := range rawItems {
+		ref := refValue(raw)
+		if ref == "" {
+			if mapped, ok := raw.(map[string]any); ok {
+				ref = nonEmpty(refFromField(mapped, "athlete"), nestedRef(mapped, "athlete"))
+			}
+		}
 		playerID := strings.TrimSpace(refIDs(ref)["athleteId"])
 		if playerID == "" {
 			continue
@@ -1542,11 +1579,10 @@ func mapSliceField(payload map[string]any, key string) []map[string]any {
 }
 
 func refFromField(payload map[string]any, key string) string {
-	ref := mapField(payload, key)
-	if ref == nil {
+	if payload == nil {
 		return ""
 	}
-	return stringField(ref, "$ref")
+	return refValue(payload[key])
 }
 
 func nestedRef(payload map[string]any, keys ...string) string {
@@ -1554,16 +1590,33 @@ func nestedRef(payload map[string]any, keys ...string) string {
 		return ""
 	}
 
-	current := payload
-	for _, key := range keys {
-		next := mapField(current, key)
-		if next == nil {
+	var current any = payload
+	for idx, key := range keys {
+		mapped, ok := current.(map[string]any)
+		if !ok || mapped == nil {
 			return ""
+		}
+		next, ok := mapped[key]
+		if !ok || next == nil {
+			return ""
+		}
+		if idx == len(keys)-1 {
+			return refValue(next)
 		}
 		current = next
 	}
+	return ""
+}
 
-	return stringField(current, "$ref")
+func refValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		return strings.TrimSpace(stringField(typed, "$ref"))
+	default:
+		return ""
+	}
 }
 
 func normalizePlayerStyles(payload map[string]any) []PlayerStyle {

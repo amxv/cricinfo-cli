@@ -100,6 +100,40 @@ func TestPhase11FixtureNormalizationPreservesDismissalAndDeliveryMetadata(t *tes
 	}
 }
 
+func TestPhase11DeliveryNormalizationHandlesStringAthleteRefs(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte(`{
+		"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/11132/events/1527689/competitions/1527689/details/999",
+		"id":"999",
+		"team":"http://core.espnuk.org/v2/sports/cricket/teams/4340",
+		"batsman":{"athlete":"http://core.espnuk.org/v2/sports/cricket/athletes/253802"},
+		"bowler":{"athlete":"http://core.espnuk.org/v2/sports/cricket/athletes/26421"},
+		"dismissal":{"type":"caught","fielder":{"athlete":"http://core.espnuk.org/v2/sports/cricket/athletes/34102"}},
+		"athletesInvolved":[
+			"http://core.espnuk.org/v2/sports/cricket/athletes/253802",
+			{"$ref":"http://core.espnuk.org/v2/sports/cricket/athletes/26421"}
+		]
+	}`)
+
+	delivery, err := NormalizeDeliveryEvent(raw)
+	if err != nil {
+		t.Fatalf("NormalizeDeliveryEvent string-ref payload error: %v", err)
+	}
+	if delivery.BatsmanPlayerID != "253802" {
+		t.Fatalf("expected batsman id 253802, got %+v", delivery)
+	}
+	if delivery.BowlerPlayerID != "26421" {
+		t.Fatalf("expected bowler id 26421, got %+v", delivery)
+	}
+	if delivery.FielderPlayerID != "34102" {
+		t.Fatalf("expected fielder id 34102, got %+v", delivery)
+	}
+	if len(delivery.AthletePlayerIDs) < 2 {
+		t.Fatalf("expected athlete ids extracted from mixed string/map payload, got %+v", delivery.AthletePlayerIDs)
+	}
+}
+
 func TestPlayerServicePhase11MatchContextCommands(t *testing.T) {
 	t.Parallel()
 

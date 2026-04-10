@@ -273,6 +273,7 @@ func (s *HistoricalScopeSession) HydratePlayerMatchSummaries(ctx context.Context
 	items := make([]PlayerMatch, 0)
 	warnings := make([]string, 0)
 	for _, team := range match.Teams {
+		team = s.enrichTeamIdentityFromIndex(team)
 		rosterRef := nonEmpty(strings.TrimSpace(team.RosterRef), competitorSubresourceRef(match, team.ID, "roster"))
 		if rosterRef == "" {
 			warnings = append(warnings, fmt.Sprintf("roster route unavailable for team %q", team.ID))
@@ -296,6 +297,10 @@ func (s *HistoricalScopeSession) HydratePlayerMatchSummaries(ctx context.Context
 			if playerID == "" {
 				continue
 			}
+			if strings.TrimSpace(entry.DisplayName) == "" && s.resolver != nil {
+				_ = s.resolver.seedPlayerByID(ctx, playerID, match.LeagueID, match.ID)
+			}
+			entry = s.enrichRosterEntryFromIndex(entry)
 
 			statsRef := rosterPlayerStatisticsRef(match, team, entry)
 			if statsRef == "" {
@@ -319,13 +324,13 @@ func (s *HistoricalScopeSession) HydratePlayerMatchSummaries(ctx context.Context
 			items = append(items, PlayerMatch{
 				PlayerID:      playerID,
 				PlayerRef:     entry.PlayerRef,
-				PlayerName:    nonEmpty(entry.DisplayName, playerID),
+				PlayerName:    nonEmpty(entry.DisplayName, "Unknown Player"),
 				MatchID:       match.ID,
 				CompetitionID: nonEmpty(match.CompetitionID, match.ID),
 				EventID:       match.EventID,
 				LeagueID:      match.LeagueID,
 				TeamID:        team.ID,
-				TeamName:      nonEmpty(team.ShortName, team.Name, team.ID),
+				TeamName:      nonEmpty(team.ShortName, team.Name, "Unknown Team"),
 				StatisticsRef: statsDoc.CanonicalRef,
 				LinescoresRef: rosterPlayerLinescoresRef(match, team, entry),
 				Batting:       batting,
@@ -382,9 +387,21 @@ func (s *HistoricalScopeSession) HydrateDeliverySummaries(ctx context.Context, m
 		return nil, nil, fmt.Errorf("decode details page %q: %w", resolved.CanonicalRef, err)
 	}
 
-	items := make([]DeliveryEvent, 0, len(page.Items))
 	warnings := make([]string, 0)
-	for _, item := range page.Items {
+	pageItems := append([]Ref(nil), page.Items...)
+	if page.PageCount > 1 {
+		helper := &MatchService{client: s.client, resolver: s.resolver}
+		extraItems, pageWarnings, pageErr := helper.resolvePageRefs(ctx, resolved)
+		if pageErr != nil {
+			warnings = append(warnings, pageErr.Error())
+		} else {
+			pageItems = extraItems
+			warnings = append(warnings, pageWarnings...)
+		}
+	}
+
+	items := make([]DeliveryEvent, 0, len(pageItems))
+	for _, item := range pageItems {
 		itemRef := strings.TrimSpace(item.URL)
 		if itemRef == "" {
 			warnings = append(warnings, "skip detail item with empty ref")
@@ -1583,4 +1600,55 @@ func matchCacheKey(match Match) string {
 		strings.TrimSpace(refIDs(match.Ref)["eventId"]),
 		strings.TrimSpace(match.Ref),
 	)
+}
+
+func (s *HistoricalScopeSession) enrichRosterEntryFromIndex(entry TeamRosterEntry) TeamRosterEntry {
+	if s == nil || s.resolver == nil || s.resolver.index == nil {
+		return entry
+	}
+	playerID := strings.TrimSpace(entry.PlayerID)
+	if playerID == "" {
+		return entry
+	}
+	player, ok := s.resolver.index.FindByID(EntityPlayer, playerID)
+	if !ok {
+		return entry
+	}
+	if strings.TrimSpace(entry.DisplayName) == "" {
+		entry.DisplayName = nonEmpty(player.Name, player.ShortName)
+	}
+	if strings.TrimSpace(entry.PlayerRef) == "" {
+		entry.PlayerRef = strings.TrimSpace(player.Ref)
+	}
+	return entry
+}
+
+func (s *HistoricalScopeSession) enrichTeamIdentityFromIndex(team Team) Team {
+	if s == nil || s.resolver == nil || s.resolver.index == nil {
+		return team
+	}
+	teamID := strings.TrimSpace(team.ID)
+	if teamID == "" {
+		teamID = strings.TrimSpace(refIDs(team.Ref)["teamId"])
+	}
+	if teamID == "" {
+		teamID = strings.TrimSpace(refIDs(team.Ref)["competitorId"])
+	}
+	if teamID == "" {
+		return team
+	}
+	indexed, ok := s.resolver.index.FindByID(EntityTeam, teamID)
+	if !ok {
+		return team
+	}
+	if strings.TrimSpace(team.Name) == "" {
+		team.Name = strings.TrimSpace(indexed.Name)
+	}
+	if strings.TrimSpace(team.ShortName) == "" {
+		team.ShortName = strings.TrimSpace(indexed.ShortName)
+	}
+	if strings.TrimSpace(team.Ref) == "" {
+		team.Ref = strings.TrimSpace(indexed.Ref)
+	}
+	return team
 }

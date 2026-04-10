@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -167,7 +168,7 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 	case ResultStatusPartial:
 		warningLine := "Partial data returned"
 		if len(result.Warnings) > 0 {
-			warningLine = warningLine + ": " + strings.Join(result.Warnings, "; ")
+			warningLine = warningLine + ": " + strings.Join(sanitizeWarningsForText(result.Warnings), "; ")
 		}
 		lines = append(lines, warningLine)
 	}
@@ -216,6 +217,42 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			}
 			lines = append(lines, "Analysis")
 			lines = append(lines, formatAnalysisView(itemMap)...)
+			return writeTextLines(w, lines)
+		}
+		if result.Kind == EntityPlayer {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Player")
+			lines = append(lines, formatPlayerProfile(itemMap)...)
+			return writeTextLines(w, lines)
+		}
+		if result.Kind == EntityPlayerMatch {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Player Match")
+			lines = append(lines, formatPlayerMatchView(itemMap)...)
+			return writeTextLines(w, lines)
+		}
+		if result.Kind == EntityCompMetadata {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Competition Metadata")
+			lines = append(lines, formatCompetitionMetadata(itemMap)...)
+			return writeTextLines(w, lines)
+		}
+		if result.Kind == EntityMatch || result.Kind == EntityCompetition {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, kindTitle)
+			lines = append(lines, formatMatchView(itemMap)...)
 			return writeTextLines(w, lines)
 		}
 
@@ -387,7 +424,7 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		)
 	case EntityPlayerDelivery:
 		short := firstNonEmpty(valueString(entity, "shortText"), valueString(entity, "text"))
-		return joinParts(short, valueString(entity, "involvement"), valueString(entity, "id"))
+		return joinParts(short, involvementLabel(entity), overBallLabel(entity))
 	case EntityNewsArticle:
 		return joinParts(firstNonEmpty(valueString(entity, "headline"), valueString(entity, "title"), valueString(entity, "id")), valueString(entity, "published"), valueString(entity, "byline"))
 	case EntityTeam:
@@ -402,7 +439,7 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		if valueString(entity, "active") == "true" {
 			badges = append(badges, "active")
 		}
-		return joinParts(name, valueString(entity, "playerRef"), strings.Join(badges, ", "))
+		return joinParts(name, strings.Join(badges, ", "))
 	case EntityTeamScore:
 		return joinParts(valueString(entity, "displayValue"), valueString(entity, "value"), bracket(valueString(entity, "source")))
 	case EntityTeamLeaders:
@@ -487,15 +524,13 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 			"id", "competitionId", "eventId", "leagueId",
 			"description", "shortDescription", "matchState",
 			"date", "endDate", "venueName", "venueSummary", "scoreSummary",
-			"statusRef", "detailsRef", "teams",
+			"teams",
 		}
 	case EntityCompetition:
 		order = []string{
 			"id", "competitionId", "eventId", "leagueId",
 			"description", "shortDescription", "matchState",
 			"date", "endDate", "venueName", "venueSummary", "scoreSummary",
-			"statusRef", "detailsRef", "matchcardsRef", "situationRef",
-			"officialsRef", "broadcastsRef", "ticketsRef", "oddsRef",
 			"teams",
 		}
 	case EntityCompOfficial, EntityCompBroadcast, EntityCompTicket, EntityCompOdds:
@@ -517,12 +552,12 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	case EntityPlayerMatch:
 		order = []string{
 			"playerId", "playerName", "matchId", "teamId", "teamName",
-			"statisticsRef", "linescoresRef", "summary", "batting", "bowling", "fielding",
+			"summary", "batting", "bowling", "fielding",
 		}
 	case EntityPlayerInnings:
 		order = []string{
 			"playerId", "playerName", "matchId", "teamId", "teamName",
-			"inningsNumber", "period", "order", "isBatting", "statisticsRef", "summary",
+			"inningsNumber", "period", "order", "isBatting", "summary",
 			"batting", "bowling", "fielding",
 		}
 	case EntityPlayerDismissal:
@@ -543,7 +578,7 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	case EntityNewsArticle:
 		order = []string{"id", "headline", "title", "byline", "published", "description", "webUrl"}
 	case EntityTeam:
-		order = []string{"id", "name", "shortName", "homeAway", "scoreRef", "rosterRef", "leadersRef"}
+		order = []string{"id", "name", "shortName", "homeAway"}
 	case EntityTeamScore:
 		order = []string{"teamId", "matchId", "scope", "displayValue", "value", "winner", "source"}
 	case EntityLeague:
@@ -719,6 +754,119 @@ func formatInningsTimelines(entity map[string]any) []string {
 	return lines
 }
 
+func formatPlayerProfile(entity map[string]any) []string {
+	lines := make([]string, 0, 16)
+	if name := firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "fullName"), valueString(entity, "name")); name != "" {
+		lines = append(lines, "Name: "+name)
+	}
+	if playerID := valueString(entity, "id"); playerID != "" {
+		lines = append(lines, "Player ID: "+playerID)
+	}
+	if role := valueString(entity, "position"); role != "" {
+		lines = append(lines, "Role: "+role)
+	}
+	if team := namedValue(entity["team"]); team != "" && !looksLikeRawIdentifier(team) {
+		lines = append(lines, "Team: "+team)
+	}
+	if styles := styleSummary(entity); styles != "" {
+		lines = append(lines, "Styles: "+styles)
+	}
+	if majorTeams := sliceSummary(entity, "majorTeams", 4); majorTeams != "" {
+		lines = append(lines, "Major Teams: "+majorTeams)
+	}
+	if debuts := sliceSummary(entity, "debuts", 4); debuts != "" {
+		if strings.HasSuffix(debuts, " items") {
+			lines = append(lines, fmt.Sprintf("Debuts: %d matches", len(sliceValue(entity, "debuts"))))
+		} else {
+			lines = append(lines, "Debuts: "+debuts)
+		}
+	} else if debuts := sliceValue(entity, "debuts"); len(debuts) > 0 {
+		lines = append(lines, fmt.Sprintf("Debuts: %d matches", len(debuts)))
+	}
+	if born := valueString(entity, "dateOfBirthDisplay"); born != "" {
+		lines = append(lines, "Born: "+born)
+	}
+	return lines
+}
+
+func formatPlayerMatchView(entity map[string]any) []string {
+	lines := make([]string, 0, 16)
+	if player := valueString(entity, "playerName"); player != "" {
+		lines = append(lines, "Player: "+player)
+	}
+	if matchID := valueString(entity, "matchId"); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+	if team := valueString(entity, "teamName"); team != "" {
+		lines = append(lines, "Team: "+team)
+	}
+	if summary, ok := entity["summary"].(map[string]any); ok {
+		if text := summarizePlayerMatchSummary(summary); text != "" {
+			lines = append(lines, text)
+		}
+	}
+	if batting := sliceValue(entity, "batting"); len(batting) > 0 {
+		lines = append(lines, fmt.Sprintf("Batting Categories: %d", len(batting)))
+	}
+	if bowling := sliceValue(entity, "bowling"); len(bowling) > 0 {
+		lines = append(lines, fmt.Sprintf("Bowling Categories: %d", len(bowling)))
+	}
+	if fielding := sliceValue(entity, "fielding"); len(fielding) > 0 {
+		lines = append(lines, fmt.Sprintf("Fielding Categories: %d", len(fielding)))
+	}
+	return lines
+}
+
+func formatCompetitionMetadata(entity map[string]any) []string {
+	lines := make([]string, 0, 12)
+	if competition, ok := entity["competition"].(map[string]any); ok {
+		lines = append(lines, "Competition: "+joinParts(
+			firstNonEmpty(valueString(competition, "shortDescription"), valueString(competition, "description"), valueString(competition, "id")),
+			matchTeamsLabel(competition),
+			valueString(competition, "matchState"),
+		))
+	}
+	if officials := summarizeNamedItems(sliceValue(entity, "officials"), 5); officials != "" {
+		lines = append(lines, "Officials: "+officials)
+	}
+	if broadcasts := summarizeNamedItems(sliceValue(entity, "broadcasts"), 4); broadcasts != "" {
+		lines = append(lines, "Broadcasts: "+broadcasts)
+	}
+	if odds := summarizeNamedItems(sliceValue(entity, "odds"), 3); odds != "" {
+		lines = append(lines, "Odds: "+odds)
+	}
+	if tickets := sliceValue(entity, "tickets"); len(tickets) > 0 {
+		lines = append(lines, fmt.Sprintf("Tickets: %d options", len(tickets)))
+	}
+	return lines
+}
+
+func formatMatchView(entity map[string]any) []string {
+	lines := make([]string, 0, 16)
+	if id := valueString(entity, "id"); id != "" {
+		lines = append(lines, "Match: "+id)
+	}
+	if desc := firstNonEmpty(valueString(entity, "shortDescription"), valueString(entity, "description")); desc != "" {
+		lines = append(lines, "Fixture: "+desc)
+	}
+	if state := valueString(entity, "matchState"); state != "" {
+		lines = append(lines, "Status: "+state)
+	}
+	if score := valueString(entity, "scoreSummary"); score != "" {
+		lines = append(lines, "Score: "+score)
+	}
+	if venue := firstNonEmpty(valueString(entity, "venueName"), valueString(entity, "venueSummary")); venue != "" {
+		lines = append(lines, "Venue: "+venue)
+	}
+	if date := valueString(entity, "date"); date != "" {
+		lines = append(lines, "Date: "+date)
+	}
+	if teams := summarizeNamedItems(sliceValue(entity, "teams"), 4); teams != "" {
+		lines = append(lines, "Teams: "+teams)
+	}
+	return lines
+}
+
 func formatPlayerStatistics(entity map[string]any) []string {
 	lines := make([]string, 0, 64)
 
@@ -880,8 +1028,8 @@ func formatPartnershipCards(cards []any) []string {
 func formatTeamLeaders(entity map[string]any) []string {
 	lines := make([]string, 0, 64)
 
-	if teamID := valueString(entity, "teamId"); teamID != "" {
-		lines = append(lines, "Team: "+teamID)
+	if teamName := firstNonEmpty(valueString(entity, "teamName"), valueString(entity, "name")); teamName != "" {
+		lines = append(lines, "Team: "+teamName)
 	}
 	if matchID := valueString(entity, "matchId"); matchID != "" {
 		lines = append(lines, "Match: "+matchID)
@@ -945,7 +1093,7 @@ func formatAnalysisView(entity map[string]any) []string {
 	scopeMap, _ := entity["scope"].(map[string]any)
 	if scopeMap != nil {
 		mode := valueString(scopeMap, "mode")
-		league := firstNonEmpty(valueString(scopeMap, "leagueName"), valueString(scopeMap, "leagueId"))
+		league := firstNonEmpty(valueString(scopeMap, "requestedLeagueId"), valueString(scopeMap, "leagueName"), valueString(scopeMap, "leagueId"))
 		matchCount := valueString(scopeMap, "matchCount")
 		lines = append(lines, "Scope: "+joinParts(mode, league, "matches "+matchCount))
 		if seasons := sliceValue(scopeMap, "seasons"); len(seasons) > 0 {
@@ -977,9 +1125,10 @@ func formatAnalysisView(entity map[string]any) []string {
 		if !ok {
 			continue
 		}
+		label := analysisRowLabel(row)
 		line := joinParts(
 			"#"+valueString(row, "rank"),
-			valueString(row, "key"),
+			label,
 			valueString(row, "value"),
 		)
 		if count := valueString(row, "count"); count != "" {
@@ -989,6 +1138,9 @@ func formatAnalysisView(entity map[string]any) []string {
 			line = joinParts(line, "matches "+matches)
 		}
 		if line == "" {
+			continue
+		}
+		if valueString(row, "value") == "0" {
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("  %d. %s", i+1, line))
@@ -1011,7 +1163,7 @@ func formatTeamLeaderCategory(category map[string]any, role string) []string {
 			continue
 		}
 
-		player := firstNonEmpty(valueString(leader, "athleteName"), valueString(leader, "athleteId"), valueString(leader, "athleteRef"))
+		player := firstNonEmpty(valueString(leader, "athleteName"), valueString(leader, "name"), "Unknown player")
 		primary := valueString(leader, "displayValue")
 		if primary == "" {
 			primary = valueString(leader, "value")
@@ -1076,6 +1228,279 @@ func leaderCategoryRole(category map[string]any) string {
 	return "other"
 }
 
+func analysisRowLabel(row map[string]any) string {
+	if row == nil {
+		return ""
+	}
+	parts := make([]string, 0, 4)
+	if player := valueString(row, "playerName"); player != "" {
+		parts = append(parts, player)
+	}
+	if team := valueString(row, "teamName"); team != "" {
+		parts = append(parts, team)
+	}
+	if dismissal := valueString(row, "dismissalType"); dismissal != "" {
+		parts = append(parts, dismissal)
+	}
+	innings := valueString(row, "inningsNumber")
+	period := valueString(row, "period")
+	if innings != "" && innings != "0" {
+		if period != "" && period != "0" {
+			parts = append(parts, innings+"/"+period)
+		} else {
+			parts = append(parts, innings)
+		}
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, " | ")
+	}
+	if key := valueString(row, "key"); key != "" {
+		return sanitizeAnalysisKey(key)
+	}
+	return "row"
+}
+
+func sanitizeAnalysisKey(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	segments := strings.Split(key, "|")
+	values := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			continue
+		}
+		_, value, ok := strings.Cut(segment, "=")
+		if !ok {
+			continue
+		}
+		value = sanitizeWarningText(value)
+		if value == "" || looksLikeRawIdentifier(value) {
+			continue
+		}
+		values = append(values, value)
+	}
+	if len(values) == 0 {
+		return "row"
+	}
+	return strings.Join(values, " | ")
+}
+
+func looksLikeRawIdentifier(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return true
+	}
+	if strings.Contains(value, "/") || strings.Contains(value, "http://") || strings.Contains(value, "https://") {
+		return true
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+var (
+	urlLikeTokenPattern  = regexp.MustCompile(`https?://\S+`)
+	htmlTagPattern       = regexp.MustCompile(`<[^>]*>`)
+	internalPathPattern  = regexp.MustCompile(`(?:https?://[^\s]+)?/v2/sports/cricket[^\s]*`)
+	spaceCollapsePattern = regexp.MustCompile(`\s+`)
+)
+
+func sanitizeWarningsForText(warnings []string) []string {
+	out := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		cleaned := sanitizeWarningText(warning)
+		if cleaned == "" {
+			continue
+		}
+		out = append(out, cleaned)
+	}
+	if len(out) == 0 {
+		return []string{"partial data"}
+	}
+	return out
+}
+
+func sanitizeWarningText(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	cleaned := htmlTagPattern.ReplaceAllString(raw, " ")
+	cleaned = internalPathPattern.ReplaceAllString(cleaned, " ")
+	cleaned = urlLikeTokenPattern.ReplaceAllString(cleaned, " ")
+	cleaned = strings.ReplaceAll(cleaned, `""`, "")
+	lowered := strings.ToLower(cleaned)
+	if strings.Contains(lowered, "backend fetch failed") || strings.Contains(lowered, "context deadline exceeded") {
+		return "upstream request failed"
+	}
+	cleaned = spaceCollapsePattern.ReplaceAllString(cleaned, " ")
+	return strings.TrimSpace(cleaned)
+}
+
+func overBallLabel(entity map[string]any) string {
+	over := valueString(entity, "overNumber")
+	ball := valueString(entity, "ballNumber")
+	if over == "" {
+		return ""
+	}
+	if ball == "" {
+		return "over " + over
+	}
+	return "over " + over + "." + ball
+}
+
+func involvementLabel(entity map[string]any) string {
+	roles := stringSliceValue(entity, "involvement")
+	if len(roles) == 0 {
+		return ""
+	}
+	if len(roles) > 1 {
+		filtered := make([]string, 0, len(roles))
+		for _, role := range roles {
+			if role == "involved" {
+				continue
+			}
+			filtered = append(filtered, role)
+		}
+		if len(filtered) > 0 {
+			roles = filtered
+		}
+	}
+	return strings.Join(roles, ", ")
+}
+
+func sliceSummary(entity map[string]any, key string, limit int) string {
+	return summarizeNamedItems(sliceValue(entity, key), limit)
+}
+
+func summarizeNamedItems(items []any, limit int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, minInt(len(items), limit))
+	for _, raw := range items {
+		mapped, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := firstNonEmpty(
+			valueString(mapped, "displayName"),
+			valueString(mapped, "fullName"),
+			valueString(mapped, "shortName"),
+			valueString(mapped, "name"),
+			valueString(mapped, "headline"),
+			valueString(mapped, "title"),
+		)
+		if name == "" {
+			name = namedValue(mapped)
+		}
+		if name == "" {
+			continue
+		}
+		parts = append(parts, name)
+		if len(parts) >= limit {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("%d items", len(items))
+	}
+	if len(items) > len(parts) {
+		return strings.Join(parts, ", ") + fmt.Sprintf(" (+%d more)", len(items)-len(parts))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func namedValue(raw any) string {
+	mapped, ok := raw.(map[string]any)
+	if !ok || mapped == nil {
+		return ""
+	}
+	name := firstNonEmpty(
+		valueString(mapped, "displayName"),
+		valueString(mapped, "fullName"),
+		valueString(mapped, "shortName"),
+		valueString(mapped, "name"),
+	)
+	if name != "" {
+		return name
+	}
+	id := valueString(mapped, "id")
+	if looksLikeRawIdentifier(id) {
+		return ""
+	}
+	return id
+}
+
+func styleSummary(entity map[string]any) string {
+	items := sliceValue(entity, "styles")
+	if len(items) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(items))
+	for _, raw := range items {
+		mapped, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := firstNonEmpty(valueString(mapped, "description"), valueString(mapped, "shortDescription"), valueString(mapped, "type"))
+		if name == "" {
+			continue
+		}
+		parts = append(parts, name)
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("%d styles", len(items))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func summarizePlayerMatchSummary(summary map[string]any) string {
+	runs := valueString(summary, "runs")
+	balls := valueString(summary, "ballsFaced")
+	dismissal := valueString(summary, "dismissalName")
+	strikeRate := valueString(summary, "strikeRate")
+	parts := []string{
+		nonEmptyRunsBalls(runs, balls),
+		nonEmptyLabel("dismissal", dismissal),
+		nonEmptyLabel("SR", strikeRate),
+		nonEmptyLabel("econ", valueString(summary, "economyRate")),
+		nonEmptyLabel("dots", valueString(summary, "dots")),
+	}
+	text := joinParts(parts...)
+	if text == "" {
+		return ""
+	}
+	return "Summary: " + text
+}
+
+func nonEmptyRunsBalls(runs, balls string) string {
+	if runs == "" && balls == "" {
+		return ""
+	}
+	if runs != "" && balls != "" {
+		return runs + " runs off " + balls
+	}
+	if runs != "" {
+		return runs + " runs"
+	}
+	return balls + " balls"
+}
+
+func nonEmptyLabel(label, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return label + " " + value
+}
+
 func mapsKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for key := range m {
@@ -1099,6 +1524,18 @@ func valueString(m map[string]any, key string) string {
 		return fmt.Sprintf("%.2f", typed)
 	case bool:
 		return fmt.Sprintf("%t", typed)
+	case map[string]any:
+		return firstNonEmpty(
+			valueString(typed, "displayName"),
+			valueString(typed, "fullName"),
+			valueString(typed, "shortName"),
+			valueString(typed, "name"),
+			valueString(typed, "headline"),
+			valueString(typed, "title"),
+			valueString(typed, "id"),
+		)
+	case []any:
+		return fmt.Sprintf("%d items", len(typed))
 	default:
 		return strings.TrimSpace(fmt.Sprintf("%v", typed))
 	}

@@ -132,9 +132,7 @@ func (r *Resolver) Search(ctx context.Context, kind EntityKind, query string, op
 		PreferredMatchID:  strings.TrimSpace(opts.MatchID),
 	})
 
-	if err := r.index.Persist(); err != nil {
-		warnings = append(warnings, fmt.Sprintf("persist cache: %v", err))
-	}
+	_ = r.index.Persist()
 
 	return SearchResult{Entities: entities, Warnings: compactWarnings(warnings)}, nil
 }
@@ -558,7 +556,7 @@ func (r *Resolver) seedPlayerRef(ctx context.Context, ref, leagueID, matchID str
 }
 
 func (r *Resolver) seedPlayerByID(ctx context.Context, id, leagueID, matchID string) error {
-	if _, ok := r.index.FindByID(EntityPlayer, id); ok {
+	if existing, ok := r.index.FindByID(EntityPlayer, id); ok && (strings.TrimSpace(existing.Name) != "" || strings.TrimSpace(existing.ShortName) != "") {
 		return nil
 	}
 

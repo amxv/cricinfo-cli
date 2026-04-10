@@ -306,13 +306,37 @@ func (i *EntityIndex) Search(kind EntityKind, query string, limit int, context S
 			continue
 		}
 		if context.PreferredLeagueID != "" && entity.LeagueID == context.PreferredLeagueID {
-			score += 40
+			score += 200
 		}
 		if context.PreferredMatchID != "" && entity.MatchID == context.PreferredMatchID {
-			score += 40
+			score += 500
 		}
 
 		matches = append(matches, scored{entity: entity, score: score})
+	}
+
+	if preferredMatchID := strings.TrimSpace(context.PreferredMatchID); preferredMatchID != "" {
+		matchScoped := make([]scored, 0, len(matches))
+		for _, candidate := range matches {
+			if strings.TrimSpace(candidate.entity.MatchID) == preferredMatchID {
+				matchScoped = append(matchScoped, candidate)
+			}
+		}
+		if len(matchScoped) > 0 {
+			matches = matchScoped
+		}
+	}
+
+	if preferredLeagueID := strings.TrimSpace(context.PreferredLeagueID); preferredLeagueID != "" {
+		leagueScoped := make([]scored, 0, len(matches))
+		for _, candidate := range matches {
+			if strings.TrimSpace(candidate.entity.LeagueID) == preferredLeagueID {
+				leagueScoped = append(leagueScoped, candidate)
+			}
+		}
+		if len(leagueScoped) > 0 {
+			matches = leagueScoped
+		}
 	}
 
 	sort.Slice(matches, func(a, b int) bool {
@@ -487,7 +511,7 @@ func aliasMatchScore(alias, query string, queryTokens []string) int {
 	matched := 0
 	for _, qToken := range queryTokens {
 		for _, aliasToken := range aliasTokens {
-			if strings.HasPrefix(aliasToken, qToken) || strings.HasPrefix(qToken, aliasToken) {
+			if aliasTokenMatchesQuery(aliasToken, qToken) {
 				matched++
 				break
 			}
@@ -497,6 +521,20 @@ func aliasMatchScore(alias, query string, queryTokens []string) int {
 		return 0
 	}
 	return 300 + (matched * 60)
+}
+
+func aliasTokenMatchesQuery(aliasToken, queryToken string) bool {
+	if aliasToken == "" || queryToken == "" {
+		return false
+	}
+	if aliasToken == queryToken {
+		return true
+	}
+	if strings.HasPrefix(aliasToken, queryToken) {
+		return true
+	}
+	// Avoid treating single-letter initials as a match for full-name tokens.
+	return len(aliasToken) >= 2 && strings.HasPrefix(queryToken, aliasToken)
 }
 
 func normalizeAlias(raw string) string {

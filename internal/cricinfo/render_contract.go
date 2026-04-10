@@ -481,6 +481,7 @@ type TeamScore struct {
 type TeamLeaders struct {
 	Ref        string               `json:"ref,omitempty"`
 	TeamID     string               `json:"teamId,omitempty"`
+	TeamName   string               `json:"teamName,omitempty"`
 	MatchID    string               `json:"matchId,omitempty"`
 	Scope      TeamScope            `json:"scope,omitempty"`
 	Name       string               `json:"name,omitempty"`
@@ -774,6 +775,7 @@ type FallOfWicket struct {
 // AnalysisScope captures the resolved analysis traversal scope.
 type AnalysisScope struct {
 	Mode            string           `json:"mode"`
+	RequestedLeagueID string         `json:"requestedLeagueId,omitempty"`
 	LeagueID        string           `json:"leagueId,omitempty"`
 	LeagueName      string           `json:"leagueName,omitempty"`
 	Seasons         []string         `json:"seasons,omitempty"`

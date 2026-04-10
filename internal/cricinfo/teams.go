@@ -201,7 +201,9 @@ func (s *TeamService) Leaders(ctx context.Context, teamQuery string, opts TeamLo
 	if err != nil {
 		return NormalizedResult{}, fmt.Errorf("normalize team leaders %q: %w", resolved.CanonicalRef, err)
 	}
-	s.enrichTeamLeaders(leaders)
+	leaders.TeamName = nonEmpty(leaders.TeamName, lookup.team.ShortName, lookup.team.Name)
+	leaders.Name = nonEmpty(leaders.Name, leaders.TeamName, "Leaders")
+	s.enrichTeamLeaders(ctx, leaders)
 
 	result := NewDataResult(EntityTeamLeaders, leaders)
 	if len(lookup.warnings) > 0 {
@@ -445,16 +447,23 @@ func (s *TeamService) enrichRosterEntries(entries []TeamRosterEntry) {
 	}
 
 	for i := range entries {
-		if entries[i].DisplayName != "" || strings.TrimSpace(entries[i].PlayerID) == "" {
+		if strings.TrimSpace(entries[i].PlayerID) == "" {
 			continue
 		}
-		if player, ok := s.resolver.index.FindByID(EntityPlayer, entries[i].PlayerID); ok {
+		player, ok := s.resolver.index.FindByID(EntityPlayer, entries[i].PlayerID)
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(entries[i].DisplayName) == "" {
 			entries[i].DisplayName = nonEmpty(player.Name, player.ShortName)
+		}
+		if strings.TrimSpace(entries[i].PlayerRef) == "" {
+			entries[i].PlayerRef = strings.TrimSpace(player.Ref)
 		}
 	}
 }
 
-func (s *TeamService) enrichTeamLeaders(leaders *TeamLeaders) {
+func (s *TeamService) enrichTeamLeaders(ctx context.Context, leaders *TeamLeaders) {
 	if leaders == nil || s.resolver == nil || s.resolver.index == nil {
 		return
 	}
@@ -462,17 +471,27 @@ func (s *TeamService) enrichTeamLeaders(leaders *TeamLeaders) {
 	for categoryIndex := range leaders.Categories {
 		for leaderIndex := range leaders.Categories[categoryIndex].Leaders {
 			entry := &leaders.Categories[categoryIndex].Leaders[leaderIndex]
-			if strings.TrimSpace(entry.AthleteName) != "" {
-				continue
-			}
 			if strings.TrimSpace(entry.AthleteID) == "" {
-				entry.AthleteName = entry.AthleteID
-				continue
+				entry.AthleteID = strings.TrimSpace(refIDs(entry.AthleteRef)["athleteId"])
 			}
-			if player, ok := s.resolver.index.FindByID(EntityPlayer, entry.AthleteID); ok {
-				entry.AthleteName = nonEmpty(player.Name, player.ShortName, entry.AthleteID)
-			} else {
-				entry.AthleteName = entry.AthleteID
+			if strings.TrimSpace(entry.AthleteID) != "" {
+				if indexed, ok := s.resolver.index.FindByID(EntityPlayer, entry.AthleteID); !ok || strings.TrimSpace(nonEmpty(indexed.Name, indexed.ShortName)) == "" {
+					_ = s.resolver.seedPlayerByID(ctx, entry.AthleteID, "", strings.TrimSpace(leaders.MatchID))
+				}
+			}
+			if strings.TrimSpace(entry.AthleteName) == "" || strings.EqualFold(strings.TrimSpace(entry.AthleteName), "Unknown player") {
+				if strings.TrimSpace(entry.AthleteID) == "" {
+					entry.AthleteName = "Unknown player"
+					continue
+				}
+				if player, ok := s.resolver.index.FindByID(EntityPlayer, entry.AthleteID); ok {
+					entry.AthleteName = nonEmpty(player.Name, player.ShortName, "Unknown player")
+				} else {
+					entry.AthleteName = "Unknown player"
+				}
+			}
+			if strings.TrimSpace(entry.AthleteName) == "" {
+				entry.AthleteName = "Unknown player"
 			}
 		}
 	}

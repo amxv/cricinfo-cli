@@ -164,6 +164,45 @@ func TestPhase15FixtureDeterministicRankingAndGrouping(t *testing.T) {
 	}
 }
 
+func TestPhase15BowlingActivityFilterSkipsNonBowlers(t *testing.T) {
+	t.Parallel()
+
+	nonBowler := &analysisAggregate{
+		row: AnalysisRow{
+			Key:        "player=Pure Batter",
+			PlayerName: "Pure Batter",
+		},
+		matchIDs: map[string]struct{}{"1527689": {}},
+	}
+	bowler := &analysisAggregate{
+		row: AnalysisRow{
+			Key:        "player=Bowler",
+			PlayerName: "Bowler",
+		},
+		matchIDs:     map[string]struct{}{"1527689": {}},
+		balls:        24,
+		runsConceded: 18,
+	}
+
+	if hasBowlingActivity(nonBowler) {
+		t.Fatalf("expected non-bowling aggregate to be filtered out")
+	}
+	if !hasBowlingActivity(bowler) {
+		t.Fatalf("expected bowling aggregate to be retained")
+	}
+
+	rows := []AnalysisRow{
+		{
+			Key:   bowler.row.Key,
+			Value: economyFromAggregate(bowler),
+		},
+	}
+	rows = rankAnalysisRows(rows, true)
+	if len(rows) != 1 || !strings.Contains(rows[0].Key, "Bowler") {
+		t.Fatalf("expected only active bowler to remain after filtering, rows=%+v", rows)
+	}
+}
+
 func TestLivePhase15SmallHistoricalScope(t *testing.T) {
 	t.Parallel()
 	requireLiveMatrix(t)

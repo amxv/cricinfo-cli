@@ -2,7 +2,10 @@ package cricinfo
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -227,6 +230,10 @@ func (s *MatchService) Innings(ctx context.Context, query string, opts MatchInni
 		passthrough.Kind = EntityInnings
 		return *passthrough, nil
 	}
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	lookup.warnings = append(lookup.warnings, s.hydrateMatch(ctx, lookup.match, statusCache, teamCache, scoreCache)...)
 
 	teams, teamWarnings, teamResult := s.selectTeamsFromMatch(ctx, *lookup.match, opts.TeamQuery, opts.LeagueID)
 	if teamResult != nil {
@@ -424,8 +431,6 @@ func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions
 	}
 
 	statusCache := map[string]matchStatusSnapshot{}
-	teamCache := map[string]teamIdentity{}
-	scoreCache := map[string]string{}
 
 	matches := make([]Match, 0, limit)
 	warnings := make([]string, 0)
@@ -434,17 +439,23 @@ func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions
 			break
 		}
 
-		eventMatches, eventWarnings, eventErr := s.matchesFromEventRef(ctx, eventRef.URL, statusCache, teamCache, scoreCache)
+		eventMatches, eventWarnings, eventErr := s.matchesFromEventRef(ctx, eventRef.URL)
 		if eventErr != nil {
 			warnings = append(warnings, fmt.Sprintf("event %s: %v", strings.TrimSpace(eventRef.URL), eventErr))
 			continue
 		}
 		warnings = append(warnings, eventWarnings...)
 
-		for _, match := range eventMatches {
+		for _, eventMatch := range eventMatches {
+			match := eventMatch
+			s.enrichMatchTeamsFromIndex(&match)
+			if liveOnly && !isLiveMatch(match) {
+				warnings = append(warnings, s.hydrateMatchStatusOnly(ctx, &match, statusCache)...)
+			}
 			if liveOnly && !isLiveMatch(match) {
 				continue
 			}
+			match.ScoreSummary = matchScoreSummary(match.Teams)
 			matches = append(matches, match)
 			if len(matches) >= limit {
 				break
@@ -563,28 +574,29 @@ func (s *MatchService) resolveMatchLookup(ctx context.Context, query string, opt
 }
 
 func (s *MatchService) deliveryEventsFromRoute(ctx context.Context, ref string, baseWarnings []string) (NormalizedResult, error) {
-	resolved, err := s.client.ResolveRefChain(ctx, ref)
+	resolved, err := s.resolveRefChainResilient(ctx, ref)
 	if err != nil {
 		return NewTransportErrorResult(EntityDeliveryEvent, ref, err), nil
 	}
 
-	page, err := DecodePage[Ref](resolved.Body)
+	pageItems, pageWarnings, err := s.resolvePageRefs(ctx, resolved)
 	if err != nil {
-		return NormalizedResult{}, fmt.Errorf("decode detail page %q: %w", resolved.CanonicalRef, err)
+		return NormalizedResult{}, err
 	}
 
-	events := make([]any, 0, len(page.Items))
+	events := make([]any, 0, len(pageItems))
 	warnings := make([]string, 0, len(baseWarnings))
 	warnings = append(warnings, baseWarnings...)
+	warnings = append(warnings, pageWarnings...)
 
-	for _, item := range page.Items {
+	for _, item := range pageItems {
 		itemRef := strings.TrimSpace(item.URL)
 		if itemRef == "" {
 			warnings = append(warnings, "skip detail item with empty ref")
 			continue
 		}
 
-		itemResolved, itemErr := s.client.ResolveRefChain(ctx, itemRef)
+		itemResolved, itemErr := s.resolveRefChainResilient(ctx, itemRef)
 		if itemErr != nil {
 			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, itemErr))
 			continue
@@ -624,6 +636,10 @@ func (s *MatchService) resolveSelectedInnings(
 	if passthrough != nil {
 		return nil, passthrough
 	}
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	lookup.warnings = append(lookup.warnings, s.hydrateMatch(ctx, lookup.match, statusCache, teamCache, scoreCache)...)
 
 	teamQuery := strings.TrimSpace(opts.TeamQuery)
 	if requireTeam && teamQuery == "" {
@@ -897,26 +913,25 @@ func (s *MatchService) fetchDetailedRefCollection(
 	ref string,
 	normalize func(itemBody []byte) (any, error),
 ) (*ResolvedDocument, []any, []string, error) {
-	resolved, err := s.client.ResolveRefChain(ctx, ref)
+	resolved, err := s.resolveRefChainResilient(ctx, ref)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	page, err := DecodePage[Ref](resolved.Body)
+	pageItems, warnings, err := s.resolvePageRefs(ctx, resolved)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("decode page %q: %w", resolved.CanonicalRef, err)
+		return nil, nil, nil, err
 	}
 
-	items := make([]any, 0, len(page.Items))
-	warnings := make([]string, 0)
-	for _, item := range page.Items {
+	items := make([]any, 0, len(pageItems))
+	for _, item := range pageItems {
 		itemRef := strings.TrimSpace(item.URL)
 		if itemRef == "" {
 			warnings = append(warnings, "skip item with empty ref")
 			continue
 		}
 
-		itemResolved, itemErr := s.client.ResolveRefChain(ctx, itemRef)
+		itemResolved, itemErr := s.resolveRefChainResilient(ctx, itemRef)
 		if itemErr != nil {
 			warnings = append(warnings, fmt.Sprintf("item %s: %v", itemRef, itemErr))
 			continue
@@ -931,6 +946,82 @@ func (s *MatchService) fetchDetailedRefCollection(
 	}
 
 	return resolved, items, compactWarnings(warnings), nil
+}
+
+func (s *MatchService) resolvePageRefs(ctx context.Context, first *ResolvedDocument) ([]Ref, []string, error) {
+	if first == nil {
+		return nil, nil, fmt.Errorf("resolved page is nil")
+	}
+	page, err := DecodePage[Ref](first.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode page %q: %w", first.CanonicalRef, err)
+	}
+
+	items := append([]Ref(nil), page.Items...)
+	if page.PageCount <= 1 {
+		return items, nil, nil
+	}
+
+	warnings := make([]string, 0)
+	baseRef := firstNonEmptyString(first.CanonicalRef, first.RequestedRef)
+	for pageIndex := 2; pageIndex <= page.PageCount; pageIndex++ {
+		pageRef := pagedRef(baseRef, pageIndex)
+		if pageRef == "" {
+			warnings = append(warnings, fmt.Sprintf("page %d unavailable for %s", pageIndex, baseRef))
+			continue
+		}
+		pageDoc, pageErr := s.resolveRefChainResilient(ctx, pageRef)
+		if pageErr != nil {
+			warnings = append(warnings, fmt.Sprintf("page %d %s: %v", pageIndex, pageRef, pageErr))
+			continue
+		}
+		nextPage, decodeErr := DecodePage[Ref](pageDoc.Body)
+		if decodeErr != nil {
+			warnings = append(warnings, fmt.Sprintf("page %d %s: %v", pageIndex, pageDoc.CanonicalRef, decodeErr))
+			continue
+		}
+		items = append(items, nextPage.Items...)
+	}
+
+	return items, compactWarnings(warnings), nil
+}
+
+func pagedRef(ref string, page int) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || page <= 1 {
+		return ref
+	}
+	parsed, err := url.Parse(ref)
+	if err != nil {
+		separator := "?"
+		if strings.Contains(ref, "?") {
+			separator = "&"
+		}
+		return ref + separator + "page=" + strconv.Itoa(page)
+	}
+	query := parsed.Query()
+	query.Set("page", strconv.Itoa(page))
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func (s *MatchService) resolveRefChainResilient(ctx context.Context, ref string) (*ResolvedDocument, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		resolved, err := s.client.ResolveRefChain(ctx, ref)
+		if err == nil {
+			return resolved, nil
+		}
+		lastErr = err
+		var statusErr *HTTPStatusError
+		if !errors.As(err, &statusErr) && !strings.Contains(strings.ToLower(err.Error()), "context deadline exceeded") {
+			break
+		}
+		if statusErr != nil && statusErr.StatusCode != 503 {
+			break
+		}
+	}
+	return nil, lastErr
 }
 
 func availableInningsPeriods(innings []Innings) string {
@@ -957,11 +1048,14 @@ func availableInningsPeriods(innings []Innings) string {
 }
 
 func findTeamInMatch(match Match, query string) *Team {
-	query = strings.ToLower(strings.TrimSpace(query))
+	query = normalizeAlias(query)
+	queryTokens := strings.Fields(query)
 	if query == "" {
 		return nil
 	}
 
+	bestScore := 0
+	var best *Team
 	for i := range match.Teams {
 		candidate := &match.Teams[i]
 		values := []string{
@@ -973,12 +1067,21 @@ func findTeamInMatch(match Match, query string) *Team {
 			strings.TrimSpace(refIDs(candidate.Ref)["competitorId"]),
 		}
 		for _, value := range values {
-			if strings.ToLower(strings.TrimSpace(value)) == query {
-				return candidate
+			normalized := normalizeAlias(value)
+			if normalized == "" {
+				continue
+			}
+			score := aliasMatchScore(normalized, query, queryTokens)
+			if score > bestScore {
+				bestScore = score
+				best = candidate
 			}
 		}
 	}
 
+	if bestScore >= 300 {
+		return best
+	}
 	return nil
 }
 
@@ -1011,13 +1114,7 @@ func inningsSubresourceRef(match Match, teamID string, innings, period int, suff
 	return ref
 }
 
-func (s *MatchService) matchesFromEventRef(
-	ctx context.Context,
-	ref string,
-	statusCache map[string]matchStatusSnapshot,
-	teamCache map[string]teamIdentity,
-	scoreCache map[string]string,
-) ([]Match, []string, error) {
+func (s *MatchService) matchesFromEventRef(ctx context.Context, ref string) ([]Match, []string, error) {
 	resolved, err := s.client.ResolveRefChain(ctx, ref)
 	if err != nil {
 		return nil, nil, err
@@ -1028,11 +1125,7 @@ func (s *MatchService) matchesFromEventRef(
 		return nil, nil, err
 	}
 
-	warnings := make([]string, 0)
-	for i := range matches {
-		warnings = append(warnings, s.hydrateMatch(ctx, &matches[i], statusCache, teamCache, scoreCache)...)
-	}
-	return matches, compactWarnings(warnings), nil
+	return matches, nil, nil
 }
 
 func (s *MatchService) hydrateMatch(
@@ -1095,6 +1188,67 @@ func (s *MatchService) hydrateMatch(
 
 	match.ScoreSummary = matchScoreSummary(match.Teams)
 	return compactWarnings(warnings)
+}
+
+func (s *MatchService) hydrateMatchStatusOnly(
+	ctx context.Context,
+	match *Match,
+	statusCache map[string]matchStatusSnapshot,
+) []string {
+	if match == nil {
+		return nil
+	}
+	statusRef := strings.TrimSpace(match.StatusRef)
+	if statusRef == "" {
+		return nil
+	}
+	snapshot, err := s.fetchStatus(ctx, statusRef, statusCache)
+	if err != nil {
+		return []string{fmt.Sprintf("status %s: %v", statusRef, err)}
+	}
+	match.MatchState = nonEmpty(match.MatchState, snapshot.stateSummary())
+	if strings.TrimSpace(match.Note) == "" {
+		match.Note = snapshot.longSummary
+	}
+	if match.Extensions == nil {
+		match.Extensions = map[string]any{}
+	}
+	match.Extensions["statusState"] = snapshot.state
+	match.Extensions["statusDetail"] = snapshot.detail
+	match.Extensions["statusShortDetail"] = snapshot.shortDetail
+	return nil
+}
+
+func (s *MatchService) enrichMatchTeamsFromIndex(match *Match) {
+	if match == nil || s == nil || s.resolver == nil || s.resolver.index == nil {
+		return
+	}
+	for i := range match.Teams {
+		team := &match.Teams[i]
+		teamID := strings.TrimSpace(team.ID)
+		if teamID == "" {
+			teamID = strings.TrimSpace(refIDs(team.Ref)["teamId"])
+		}
+		if teamID == "" {
+			teamID = strings.TrimSpace(refIDs(team.Ref)["competitorId"])
+		}
+		if teamID == "" {
+			continue
+		}
+		cached, ok := s.resolver.index.FindByID(EntityTeam, teamID)
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(team.Name) == "" {
+			team.Name = strings.TrimSpace(cached.Name)
+		}
+		if strings.TrimSpace(team.ShortName) == "" {
+			team.ShortName = strings.TrimSpace(cached.ShortName)
+		}
+		if strings.TrimSpace(team.Ref) == "" {
+			team.Ref = strings.TrimSpace(cached.Ref)
+		}
+	}
 }
 
 func (s *MatchService) fetchStatus(ctx context.Context, ref string, cache map[string]matchStatusSnapshot) (matchStatusSnapshot, error) {

@@ -363,14 +363,16 @@ func (s *AnalysisService) Bowling(ctx context.Context, opts AnalysisMetricOption
 
 		for _, player := range players {
 			totals := extractBowlingTotals(player)
+			playerName := analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName)
+			teamName := analysisDisplayTeamName(s.resolver, player.TeamID, player.TeamName)
 			row := analysisSourceRow{
 				MatchID:       strings.TrimSpace(player.MatchID),
 				LeagueID:      strings.TrimSpace(player.LeagueID),
 				SeasonID:      seasonID,
 				TeamID:        strings.TrimSpace(player.TeamID),
-				TeamName:      strings.TrimSpace(player.TeamName),
+				TeamName:      strings.TrimSpace(teamName),
 				PlayerID:      strings.TrimSpace(player.PlayerID),
-				PlayerName:    strings.TrimSpace(player.PlayerName),
+				PlayerName:    strings.TrimSpace(playerName),
 				CountValue:    1,
 				Dots:          totals.dots,
 				SixesConceded: totals.sixesConceded,
@@ -401,6 +403,12 @@ func (s *AnalysisService) Bowling(ctx context.Context, opts AnalysisMetricOption
 
 	rows := make([]AnalysisRow, 0, len(agg))
 	for key, entry := range agg {
+		if entry == nil {
+			continue
+		}
+		if !hasBowlingActivity(entry) {
+			continue
+		}
 		row := entry.row
 		row.Key = key
 		row.Metric = metric
@@ -473,14 +481,16 @@ func (s *AnalysisService) Batting(ctx context.Context, opts AnalysisMetricOption
 
 		for _, player := range players {
 			totals := extractBattingTotals(player)
+			playerName := analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName)
+			teamName := analysisDisplayTeamName(s.resolver, player.TeamID, player.TeamName)
 			row := analysisSourceRow{
 				MatchID:      strings.TrimSpace(player.MatchID),
 				LeagueID:     strings.TrimSpace(player.LeagueID),
 				SeasonID:     seasonID,
 				TeamID:       strings.TrimSpace(player.TeamID),
-				TeamName:     strings.TrimSpace(player.TeamName),
+				TeamName:     strings.TrimSpace(teamName),
 				PlayerID:     strings.TrimSpace(player.PlayerID),
-				PlayerName:   strings.TrimSpace(player.PlayerName),
+				PlayerName:   strings.TrimSpace(playerName),
 				CountValue:   1,
 				Fours:        totals.fours,
 				BattingSixes: totals.sixes,
@@ -807,17 +817,18 @@ func buildSingleScope(run *analysisScopeRun, opts AnalysisMetricOptions) Analysi
 	}
 
 	return AnalysisScope{
-		Mode:            run.mode,
-		LeagueID:        strings.TrimSpace(scope.League.ID),
-		LeagueName:      strings.TrimSpace(scope.League.Name),
-		Seasons:         compactWarnings(seasons),
-		MatchIDs:        scope.MatchIDs,
-		MatchCount:      len(scope.MatchIDs),
-		DateFrom:        strings.TrimSpace(nonEmpty(scope.DateFrom, opts.DateFrom)),
-		DateTo:          strings.TrimSpace(nonEmpty(scope.DateTo, opts.DateTo)),
-		TypeQuery:       strings.TrimSpace(opts.TypeQuery),
-		GroupQuery:      strings.TrimSpace(opts.GroupQuery),
-		HydrationMetric: run.session.Metrics(),
+		Mode:              run.mode,
+		RequestedLeagueID: strings.TrimSpace(opts.LeagueQuery),
+		LeagueID:          strings.TrimSpace(scope.League.ID),
+		LeagueName:        strings.TrimSpace(scope.League.Name),
+		Seasons:           compactWarnings(seasons),
+		MatchIDs:          scope.MatchIDs,
+		MatchCount:        len(scope.MatchIDs),
+		DateFrom:          strings.TrimSpace(nonEmpty(scope.DateFrom, opts.DateFrom)),
+		DateTo:            strings.TrimSpace(nonEmpty(scope.DateTo, opts.DateTo)),
+		TypeQuery:         strings.TrimSpace(opts.TypeQuery),
+		GroupQuery:        strings.TrimSpace(opts.GroupQuery),
+		HydrationMetric:   run.session.Metrics(),
 	}
 }
 
@@ -1107,6 +1118,13 @@ func economyFromAggregate(agg *analysisAggregate) float64 {
 	return 0
 }
 
+func hasBowlingActivity(agg *analysisAggregate) bool {
+	if agg == nil {
+		return false
+	}
+	return agg.balls > 0 || agg.runsConceded > 0 || agg.dots > 0 || agg.sixesConceded > 0 || agg.economyCount > 0
+}
+
 func strikeRateFromAggregate(agg *analysisAggregate) float64 {
 	if agg == nil {
 		return 0
@@ -1247,6 +1265,32 @@ func analysisMaxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func analysisDisplayPlayerName(resolver *Resolver, playerID, fallback string) string {
+	name := strings.TrimSpace(fallback)
+	if name != "" {
+		return name
+	}
+	if resolver != nil && resolver.index != nil {
+		if indexed, ok := resolver.index.FindByID(EntityPlayer, strings.TrimSpace(playerID)); ok {
+			name = nonEmpty(indexed.Name, indexed.ShortName)
+		}
+	}
+	return strings.TrimSpace(name)
+}
+
+func analysisDisplayTeamName(resolver *Resolver, teamID, fallback string) string {
+	name := strings.TrimSpace(fallback)
+	if name != "" {
+		return name
+	}
+	if resolver != nil && resolver.index != nil {
+		if indexed, ok := resolver.index.FindByID(EntityTeam, strings.TrimSpace(teamID)); ok {
+			name = nonEmpty(indexed.ShortName, indexed.Name)
+		}
+	}
+	return strings.TrimSpace(name)
 }
 
 type analysisFilterSpec struct {

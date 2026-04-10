@@ -307,6 +307,57 @@ func TestRenderTeamLeadersFixtureShowsBattingAndBowlingSections(t *testing.T) {
 	}
 }
 
+func TestRenderTextSanitizesTransportWarningsAndAnalysisKeys(t *testing.T) {
+	t.Parallel()
+
+	view := AnalysisView{
+		Command: "bowling",
+		Metric:  "economy",
+		Rows: []AnalysisRow{
+			{
+				Rank:  1,
+				Key:   "player=http://core.espnuk.org/v2/sports/cricket/athletes/253802",
+				Value: 6.25,
+			},
+		},
+	}
+	result := NewPartialResult(EntityAnalysisBowl, view, "detail http://core.espnuk.org/v2/sports/cricket/leagues/11132/events/1527689/competitions/1527689/details/1: <p>backend error</p>")
+
+	var buf bytes.Buffer
+	if err := Render(&buf, result, RenderOptions{Format: "text"}); err != nil {
+		t.Fatalf("Render analysis text error: %v", err)
+	}
+	text := buf.String()
+	if strings.Contains(text, "http://") || strings.Contains(text, "/v2/sports/cricket") {
+		t.Fatalf("expected transport urls to be removed from text output, got %q", text)
+	}
+	if strings.Contains(text, "<p>") || strings.Contains(text, "</p>") {
+		t.Fatalf("expected html tags to be stripped from text output, got %q", text)
+	}
+}
+
+func TestRenderTeamRosterSummaryOmitsRawPlayerRef(t *testing.T) {
+	t.Parallel()
+
+	items := []any{
+		TeamRosterEntry{
+			PlayerID:    "253802",
+			PlayerRef:   "http://core.espnuk.org/v2/sports/cricket/athletes/253802",
+			DisplayName: "Virat Kohli",
+		},
+	}
+	result := NewListResult(EntityTeamRoster, items)
+
+	var buf bytes.Buffer
+	if err := Render(&buf, result, RenderOptions{Format: "text"}); err != nil {
+		t.Fatalf("Render team roster text error: %v", err)
+	}
+	text := buf.String()
+	if strings.Contains(text, "/athletes/") || strings.Contains(text, "http://") {
+		t.Fatalf("expected roster summary to omit raw player refs, got %q", text)
+	}
+}
+
 func TestNormalizeEventAndCompetitionMatchDecoding(t *testing.T) {
 	t.Parallel()
 
