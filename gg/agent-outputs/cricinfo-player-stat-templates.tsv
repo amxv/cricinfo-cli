@@ -1,0 +1,8 @@
+34	/athletes/{id}	http://core.espnuk.org/v2/sports/cricket/athletes/1090570
+34	/athletes/{id}/statistics	http://core.espnuk.org/v2/sports/cricket/athletes/1090570/statistics
+33	/athletes/{id}/news	http://core.espnuk.org/v2/sports/cricket/athletes/1090570/news
+33	/leagues/{id}/athletes/{id}	http://core.espnuk.org/v2/sports/cricket/leagues/1098952/athletes/1090570
+30	/leagues/{id}/events/{id}/competitions/{id}/competitors/{id}/roster/{id}/statistics/{n}	http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/roster/1090570/statistics/0
+1	/athletes/{n}	http://core.espnuk.org/v2/sports/cricket/athletes/0
+1	/athletes/{n}/news	http://core.espnuk.org/v2/sports/cricket/athletes/0/news
+1	/leagues/{id}/athletes/{n}	http://core.espnuk.org/v2/sports/cricket/leagues/1098952/athletes/0
