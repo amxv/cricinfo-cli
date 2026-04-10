@@ -1,0 +1,72 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1529471/seasons/2026/types/1/groups/1/standings/1",
+  "id": "1",
+  "name": "overall",
+  "displayName": "Overall Standings",
+  "standings": [
+    {
+      "team": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789649"
+      },
+      "records": [
+        {
+          "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1529471/seasons/2026/types/1/teams/789649/records/1",
+          "id": "1",
+          "name": "Total",
+          "stats": [
+            {
+              "name": "rank",
+              "type": "rank",
+              "value": 1,
+              "displayValue": "1"
+            },
+            {
+              "name": "matchPoints",
+              "type": "matchpoints",
+              "value": 16,
+              "displayValue": "16"
+            },
+            {
+              "name": "matchesPlayed",
+              "type": "matchesplayed",
+              "value": 1,
+              "displayValue": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789651"
+      },
+      "records": [
+        {
+          "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1529471/seasons/2026/types/1/teams/789651/records/1",
+          "id": "1",
+          "name": "Total",
+          "stats": [
+            {
+              "name": "rank",
+              "type": "rank",
+              "value": 2,
+              "displayValue": "2"
+            },
+            {
+              "name": "matchPoints",
+              "type": "matchpoints",
+              "value": 14,
+              "displayValue": "14"
+            },
+            {
+              "name": "matchesPlayed",
+              "type": "matchesplayed",
+              "value": 1,
+              "displayValue": "1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+
+    {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/situation",
+                    "odds": {
+                        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/situation/odds"
+                    }
+    }
+
+
+

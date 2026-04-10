@@ -1,0 +1,157 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details/110",
+  "id": "110",
+  "uid": "s:200~e:1529474~c:1529474~d:52542569",
+  "clock": "00:00",
+  "date": "2026-4-09 10:00:00",
+  "playType": {
+    "id": "1",
+    "description": "run"
+  },
+  "team": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789643"
+  },
+  "mediaId": 0,
+  "period": 1,
+  "periodText": "1st innings",
+  "shortPeriodText": "1st innings",
+  "xCoordinate": null,
+  "yCoordinate": null,
+  "preText": "",
+  "text": "",
+  "postText": "",
+  "shortText": "Amanullah to Fazal Haq Shaheen, 1 run",
+  "homeScore": "1/0",
+  "awayScore": "0",
+  "scoreValue": 1,
+  "sequence": 100001,
+  "athletesInvolved": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/976585"
+    }
+  ],
+  "hawkeyeId": null,
+  "boundary": false,
+  "speedKPH": null,
+  "speedMPH": null,
+  "bowler": {
+    "athlete": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/976585"
+    },
+    "team": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789647/"
+    },
+    "maidens": 0,
+    "balls": 1,
+    "wickets": 0,
+    "overs": 0.1,
+    "conceded": 1
+  },
+  "otherBowler": {
+    "athlete": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/0"
+    },
+    "team": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789647/"
+    },
+    "maidens": 0,
+    "balls": 0,
+    "wickets": 0,
+    "overs": 0,
+    "conceded": 0
+  },
+  "batsman": {
+    "athlete": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"
+    },
+    "team": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789643/"
+    },
+    "totalRuns": 1,
+    "faced": 1,
+    "fours": 0,
+    "runs": 1,
+    "sixes": 0
+  },
+  "otherBatsman": {
+    "athlete": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/0"
+    },
+    "team": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/789643/"
+    },
+    "totalRuns": 0,
+    "faced": 0,
+    "fours": 0,
+    "runs": 0,
+    "sixes": 0
+  },
+  "innings": {
+    "id": "286727",
+    "runRate": 6,
+    "remainingBalls": 0,
+    "byes": 0,
+    "number": 1,
+    "balls": 1,
+    "noBalls": 0,
+    "requiredRunRate": null,
+    "wickets": 0,
+    "legByes": 0,
+    "ballLimit": 0,
+    "target": 0,
+    "session": 0,
+    "day": 0,
+    "fallOfWickets": 0,
+    "trailBy": 0,
+    "leadBy": 0,
+    "remainingRuns": null,
+    "remainingOvers": 0.0,
+    "totalRuns": 1,
+    "wides": 0,
+    "runs": 1
+  },
+  "over": {
+    "ball": 1,
+    "balls": 6,
+    "complete": false,
+    "limit": 0.0,
+    "maiden": 0,
+    "noBall": 0,
+    "wide": 0,
+    "legByes": 0,
+    "byes": 0,
+    "number": 1,
+    "runs": 5,
+    "wickets": 0,
+    "overs": 0.1,
+    "actual": 0.1,
+    "unique": 0.01
+  },
+  "dismissal": {
+    "dismissal": false,
+    "bowled": false,
+    "type": "",
+    "bowler": {
+      "athlete": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/976585"
+      }
+    },
+    "batsman": {
+      "athlete": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"
+      }
+    },
+    "text": "",
+    "minutes": 0,
+    "retiredText": ""
+  },
+  "bbbTimestamp": 0
+}
+
+
+
+
+

@@ -1,0 +1,28 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket",
+  "id": "200",
+  "uid": "s:200",
+  "name": "Cricket",
+  "slug": "cricket",
+  "leagues": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues"
+  },
+  "events": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/events"
+  },
+  "logos": [
+    {
+      "href": "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-cricket.png",
+      "width": 500,
+      "height": 500,
+      "rel": [
+        "full",
+        "default"
+      ]
+    }
+  ]
+}
+
+
+
+

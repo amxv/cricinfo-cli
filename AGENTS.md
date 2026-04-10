@@ -36,6 +36,8 @@ Direct commands:
 - `go vet ./...`
 - `npm run lint`
 
+When running Node or npm commands through background-process helpers on this machine, prefer `zsh -lc '<command>'` so the login shell initializes the expected `PATH`. Plain non-login `sh` execution may not find `npm`.
+
 ## How to customize safely
 
 1. Rename CLI command consistently in all places:

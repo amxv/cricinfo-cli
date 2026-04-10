@@ -1,0 +1,145 @@
+
+{
+    "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details/52545007",
+    "id":"52545007",
+    "uid":"s:200~e:1529474~c:1529474~d:52545007",
+    "clock":"00:00",
+    "date":"2026-4-09 10:00:00",
+    "playType":{
+        "id":"9",
+        "description":"out"
+    },
+    "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643"},
+	"mediaId": 0,
+    "period":1,
+    "periodText":"1st innings",
+    "shortPeriodText":"1st innings",
+    "xCoordinate":null,
+    "yCoordinate":null,
+    "preText":"",
+    "text":"",
+    "postText":"",
+    "shortText":"Qamar Shams to Numan Shah, OUT",
+    "homeScore":"60/1",
+    "awayScore":"0",
+    "scoreValue":0,
+    "sequence":101102,
+    "athletesInvolved":[
+                {"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1291031"}
+            ,
+                {"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361358"}
+            ,
+                {"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1436502"}
+            ]
+    ,
+            "hawkeyeId":null,
+            "boundary":false,
+            "speedKPH":null,
+            "speedMPH":null,
+            "bowler":{
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1436502"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789647/"},
+                "maidens":0,
+                "balls":2,
+                "wickets":1,
+                "overs":0.2,
+                "conceded":6
+            },
+            "otherBowler":{
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1531074"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789647/"},
+                "maidens":0,
+                "balls":12,
+                "wickets":0,
+                "overs":2.0,
+                "conceded":10
+            },
+            "batsman":
+                {
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1291031"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643/"},
+                "totalRuns":42,
+                "faced":30,
+                "fours":4,
+                "runs":0,
+                "sixes":3
+            },
+            "otherBatsman":
+                {
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643/"},
+                "totalRuns":18,
+                "faced":38,
+                "fours":2,
+                "runs":0,
+                "sixes":0
+            },
+            "innings":{
+                "id":"286727",
+                "runRate":5.29,
+                "remainingBalls":0,
+                "byes":0,
+                "number":1,
+                "balls":68,
+                "noBalls":0,
+                "requiredRunRate":null,
+                "wickets":1,
+                "legByes":0,
+                "ballLimit":0,
+                "target":0,
+                "session":0,
+                "day":0,
+                "fallOfWickets":1,
+                "trailBy":0,
+                "leadBy":0,
+                "remainingRuns":null,
+                "remainingOvers":0.0,
+                "totalRuns":0,
+                "wides":0,
+                "runs":60
+            },
+            "over":{
+                "ball":2,
+                "balls":6,
+                "complete":false,
+                "limit":0.0,
+                "maiden":0,
+                "noBall":0,
+                "wide":0,
+                "legByes":0,
+                "byes":0,
+                "number":12,
+                "runs":10,
+                "wickets":1,
+                "overs":11.2,
+                "actual":11.2,
+                "unique":11.02
+            },
+            "dismissal":{
+                "dismissal":true,
+                "bowled":true,
+                "type":"caught",
+                "bowler":{
+                    "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1436502"}
+                },
+                "batsman":{
+                    "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1291031"}
+                },
+                
+                "fielder":{
+                    "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361358"},
+                    "isKeeper":false
+                },
+                
+                "text":"Numan Shah c sub (Nazifullah Amiri) b Qamar Shams 42 (54m 30b 4x4 3x6) SR: 140",
+                "minutes":54,
+                "retiredText":""
+            }
+
+            ,
+    "bbbTimestamp":0
+}
+
+
+
+

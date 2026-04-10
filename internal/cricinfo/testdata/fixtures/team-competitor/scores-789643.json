@@ -1,0 +1,19 @@
+
+{
+    "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/1174248/events/1529474/competitions/1529474/competitors/789643/scores",
+    "place":1,
+    
+            "innings":"3",
+            "value":"319 & 69/2 (19 ov)",
+            "displayValue":"319 & 69/2 (19 ov)",
+            "winner":"false"
+            ,
+    "source":{
+        "id":1,
+        "description":"Basic/Manual"
+    }
+}
+
+
+
+

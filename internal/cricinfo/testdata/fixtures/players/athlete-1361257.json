@@ -1,0 +1,113 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1361257",
+  "id": "1361257",
+  "guid": "5832b359-bcb7-3d67-8caa-1d2c5495a48a",
+  "uid": "s:200~a:1361257",
+  "type": "cricket",
+  "name": "Fazal Haq Shaheen",
+  "firstName": "Fazal",
+  "middleName": "",
+  "lastName": "Shaheen",
+  "shortName": "",
+  "fullName": "Fazal Haq Shaheen",
+  "displayName": "Fazal Haq Shaheen",
+  "weight": 0,
+  "height": 0.00,
+  "age": 26,
+  "dateOfBirthStr": "1999-05-10T00:00Z",
+  "dateOfBirth": "1999-05-10T00:00Z",
+  "dateOfDeathStr": "",
+  "dateOfDeath": "",
+  "isActive": true,
+  "active": true,
+  "gender": "M",
+  "debutYear": null,
+  "birthPlace": {},
+  "jersey": null,
+  "style": [
+    {
+      "description": "Left-hand bat",
+      "shortDescription": "Lhb",
+      "type": "batting"
+    },
+    {
+      "description": "Slow left-arm orthodox",
+      "shortDescription": "Sla",
+      "type": "bowling"
+    }
+  ],
+  "styles": [
+    {
+      "description": "Left-hand bat",
+      "shortDescription": "Lhb",
+      "type": "batting"
+    },
+    {
+      "description": "Slow left-arm orthodox",
+      "shortDescription": "Sla",
+      "type": "bowling"
+    }
+  ],
+  "position": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN",
+    "id": "UKN",
+    "name": "Unknown",
+    "abbreviation": "UKN",
+    "leaf": true,
+    "parent": {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+    }
+  },
+  "battingName": "Fazal Haq Shaheen",
+  "fieldingName": "Fazal Haq Shaheen",
+  "country": 40,
+  "relations": [],
+  "majorTeams": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/1108867"
+    }
+  ],
+  "headshot": {
+    "href": "https://a.espncdn.com/i/headshots/cricket/players/default-player-logo-500.png",
+    "rel": [
+      "full",
+      "default"
+    ]
+  },
+  "flag": {
+    "href": "https://a.espncdn.com/i/teamlogos/cricket/500/40.png",
+    "width": 500,
+    "height": 500,
+    "alt": "AFG",
+    "rel": [
+      "full",
+      "default"
+    ]
+  },
+  "team": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/teams/40"
+  },
+  "news": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1361257/news"
+  },
+  "debuts": [],
+  "links": [
+    {
+      "language": "en",
+      "rel": [
+        "playercard",
+        "desktop"
+      ],
+      "href": "https://www.espncricinfo.com/ci/content/player/1361257.html",
+      "text": "Player Card",
+      "shortText": "Player Card",
+      "isExternal": false,
+      "isPremium": false
+    }
+  ]
+}
+
+
+
+
+

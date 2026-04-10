@@ -1,0 +1,13 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/seasons/2025",
+  "id": "19138",
+  "year": 2025,
+  "name": "Merwais Nika Regional 3-Day Trophy 2025",
+  "shortName": "Merwais Nika Regional 3-Day Trophy",
+  "types": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/seasons/2025/types"
+  },
+  "type": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/seasons/2025/types/1"
+  }
+}

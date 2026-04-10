@@ -6,7 +6,7 @@ const https = require("node:https");
 const { spawnSync } = require("node:child_process");
 
 const pkg = require("../package.json");
-const cliName = pkg.config?.cliBinaryName || "cricinfo";
+const cliName = resolveCLIName(pkg);
 
 const repoURL = pkg.repository?.url || "";
 const repoMatch = repoURL.match(/github\.com[:/](.+?)\/(.+?)(?:\.git)?$/);
@@ -135,3 +135,19 @@ main().catch((err) => {
   console.error(err.message);
   process.exit(1);
 });
+
+function resolveCLIName(packageJSON) {
+  const configured = `${packageJSON?.config?.cliBinaryName || ""}`.trim();
+  if (configured) {
+    return configured;
+  }
+
+  if (packageJSON?.bin && typeof packageJSON.bin === "object") {
+    const names = Object.keys(packageJSON.bin);
+    if (names.length > 0 && `${names[0]}`.trim()) {
+      return `${names[0]}`.trim();
+    }
+  }
+
+  return "cricinfo";
+}

@@ -1,0 +1,40 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643",
+  "id": "789643",
+  "uid": "s:200~e:1529474~c:1529474~t:789643",
+  "type": "team",
+  "order": 1,
+  "homeAway": "home",
+  "winner": false,
+  "score": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/scores"
+  },
+  "team": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/events/1529474/teams/789643"
+  },
+  "linescores": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/linescores/1"
+  },
+  "roster": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster"
+  },
+  "leaders": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/leaders"
+  },
+  "previousCompetition": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529472/competitions/1529472/competitors/789643"
+  },
+  "nextCompetition": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529476/competitions/1529476/competitors/789643"
+  },
+  "statistics": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/statistics"
+  },
+  "record": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/records"
+  }
+}
+
+
+
+

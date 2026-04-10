@@ -1,0 +1,460 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474",
+  "id": "1529474",
+  "uid": "s:200~e:1529474~c:1529474",
+  "note": "Boost Region lead by 1 run with 9 wickets remaining",
+  "description": "3rd Match",
+  "shortDescription": "3rd Match,  at Kandahar",
+  "date": "2026-04-09T05:30Z",
+  "endDate": "2026-04-12T23:59Z",
+  "timeValid": true,
+  "neutralSite": true,
+  "attendance": 0,
+  "divisionCompetition": false,
+  "conferenceCompetition": false,
+  "previewAvailable": false,
+  "recapAvailable": false,
+  "boxscoreAvailable": false,
+  "gamecastAvailable": false,
+  "playByPlayAvailable": false,
+  "ticketsAvailable": false,
+  "conversationAvailable": false,
+  "pickcenterAvailable": false,
+  "dayNight": false,
+  "liveAvailable": true,
+  "fastcastAvailable": false,
+  "preCommentaryAvailable": false,
+  "updatesOnly": false,
+  "limitedOvers": false,
+  "recent": false,
+  "reducedOvers": false,
+  "class": {
+    "internationalClassId": "0",
+    "generalClassId": "11",
+    "generalClassCard": "Other match",
+    "name": "Other matches",
+    "eventType": "Test"
+  },
+  "onWatchESPN": false,
+  "necessary": false,
+  "venue": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/venues/1145410",
+    "id": "1145410",
+    "fullName": "Kandahar Cricket Stadium",
+    "shortName": "Kandahar Cricket Stadium",
+    "address": {
+      "city": "Kandahar",
+      "state": "",
+      "zipCode": "",
+      "country": "Afghanistan",
+      "summary": "Aino Maina, Kandahar, Afghanistan Phone: +93700325731"
+    },
+    "capacity": 14000,
+    "grass": false,
+    "indoor": false,
+    "images": [],
+    "links": [
+      {
+        "language": "en",
+        "rel": [
+          "ground",
+          "desktop"
+        ],
+        "href": "https://www.espncricinfo.com/ci/content/ground/1145410.html",
+        "text": "Ground",
+        "shortText": "Ground",
+        "isExternal": false,
+        "isPremium": false
+      }
+    ]
+  },
+  "competitors": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643",
+      "id": "789643",
+      "uid": "s:200~e:1529474~c:1529474~t:789643",
+      "type": "team",
+      "order": 1,
+      "homeAway": "home",
+      "winner": false,
+      "score": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/scores"
+      },
+      "team": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/events/1529474/teams/789643"
+      },
+      "linescores": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/linescores/1"
+      },
+      "roster": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster"
+      },
+      "leaders": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/leaders"
+      },
+      "previousCompetition": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529472/competitions/1529472/competitors/789643"
+      },
+      "nextCompetition": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529476/competitions/1529476/competitors/789643"
+      },
+      "statistics": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/statistics"
+      },
+      "record": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/records"
+      }
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647",
+      "id": "789647",
+      "uid": "s:200~e:1529474~c:1529474~t:789647",
+      "type": "team",
+      "order": 2,
+      "homeAway": "away",
+      "winner": false,
+      "score": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/scores"
+      },
+      "team": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/events/1529474/teams/789647"
+      },
+      "linescores": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/linescores/1"
+      },
+      "roster": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/roster"
+      },
+      "leaders": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/leaders"
+      },
+      "previousCompetition": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/17954/events/1499363/competitions/1499363/competitors/789647"
+      },
+      "nextCompetition": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529477/competitions/1529477/competitors/789647"
+      },
+      "statistics": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/statistics"
+      },
+      "record": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/records"
+      }
+    }
+  ],
+  "status": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/status"
+  },
+  "details": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details"
+  },
+  "tiebreaker": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details?tiebreaker"
+  },
+  "officials": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/officials"
+  },
+  "odds": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/odds"
+  },
+  "matchcards": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/matchcards"
+  },
+  "broadcasts": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/broadcasts"
+  },
+  "tickets": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/tickets"
+  },
+  "notes": [
+    {
+      "href": "https://www.espncricinfo.com/ci/engine/series/index.html?season=2026",
+      "text": "2026",
+      "type": "season"
+    },
+    {
+      "text": "9,10,11 April 2026 (3-day match)",
+      "type": "matchdays"
+    },
+    {
+      "text": "Speen Ghar Region , elected to field first",
+      "type": "toss"
+    },
+    {
+      "text": "Samiullah Stanikzai",
+      "type": "livescorer"
+    },
+    {
+      "dayNumber": "",
+      "id": "752058",
+      "text": "Boost Region innings",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752062",
+      "text": "Boost Region: 50 runs in 9.5 overs (59 balls), Extras 0",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752063",
+      "text": "1st wicket: 50 runs in 59 balls (Fazal Haq 14, Numan Shah 36, Ex 0)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752067",
+      "text": "Drinks: Boost Region - 78/2 in 17.0 overs (Fazal Haq 26, Bilal Ahmad 6)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752071",
+      "text": "Boost Region: 100 runs in 19.4 overs (119 balls), Extras 1",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752078",
+      "text": "Boost Region: 150 runs in 27.3 overs (166 balls), Extras 5",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752081",
+      "text": "5th wicket: 50 runs in 54 balls (Ali Ahmad 24, Azizullah Miakhil 23, Ex 4)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752083",
+      "text": "Lunch: Boost Region - 178/4 in 35.0 overs (Azizullah Miakhil 29, Ali Ahmad 43)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752090",
+      "text": "Ali Ahmad: 50 off 58 balls (5 x 4, 1 x 6)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752091",
+      "text": "Boost Region: 200 runs in 39.4 overs (239 balls), Extras 6",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752095",
+      "text": "5th wicket: 100 runs in 132 balls (Ali Ahmad 53, Azizullah Maikhil 44, Ex 5)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752096",
+      "text": "Azizullah Miakhil: 50 off 64 balls (7 x 4, 1 x 6)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752100",
+      "text": "Drinks: Boost Region - 230/4 in 50.0 overs (Ali Ahmad 69, Azizullah Miakhil 55)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752103",
+      "text": "Boost Region: 250 runs in 54.2 overs (327 balls), Extras 7",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752105",
+      "text": "5th wicket: 150 runs in 205 balls (Ali Ahmad 82, Aziullah Maikhil 62, Ex 6)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752108",
+      "text": "Ali Ahmad: 100 off 135 balls (10 x 4, 1 x 6)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752111",
+      "text": "Tea: Boost Region - 291/7 in 64.0 overs (Abdullah 12, Zaitullah 1)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752117",
+      "text": "Boost Region: 300 runs in 67.3 overs (408 balls), Extras 7",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752122",
+      "text": "Innings Break: Boost Region - 319/10 in 72.0 overs (Zaitullah Shaheen 18)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752123",
+      "text": "Speen Ghar Region 1st innings",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752133",
+      "text": "Speen Ghar Region: 50 runs in 9.3 overs *59 balls), Extras 3",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752135",
+      "text": "15 wicket: 50 runs in 59 balls (Arshaduddin Omari 30, Usman Noori 17, Ex 3)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752137",
+      "text": "End Of Day: Speen Ghar Region - 70/1 in 16.0 overs (Abuzar Safi 5, Usman Noori 31)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752206",
+      "text": "Speen Ghar Region: 100 runs in 22.3 overs (138 balls), Extras 4",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752207",
+      "text": "2nd wicket: 50 runs in 76 balls (Usman Noori 21, Abuzar Safi 30, Ex 1)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752210",
+      "text": "Usman Noori: 50 off 78 balls (7 x 4)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752215",
+      "text": "Drinks: Speen Ghar Region - 142/2 in 32.0 overs (Jalat Khan 3, Usman Noori 62)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752218",
+      "text": "Speen Ghar Region: 150 runs in 34.3 overs (210 balls), Extras 5",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752222",
+      "text": "Speen Ghar Region: 200 in 41.2 overs (251 balls), Extras 5",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752223",
+      "text": "Jalat Khan: 50 off 43 balls (6 x 4, 3 x 6)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752227",
+      "text": "5th wicket: 50 runs in 44 balls (Jalat Khan 31, Majeed Alam 19, Ex 1)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752230",
+      "text": "Drinks: Speen Ghar Region - 238/5 in 48.2 overs (Majeed Alam 21)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752233",
+      "text": "Speen Ghar Region: 250 runs in 54.1 overs (328 balls), Extras 7",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752239",
+      "text": "Lunch: Speen Ghar Region - 265/5 in 59.0 overs (Majeed Alam 32, Shawkat Zaman 15)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752255",
+      "text": "6th wicket: 50 runs in 96 balls (Majeed Alam 20, Shawkat Zaman 29, Ex 3)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752260",
+      "text": "Speen Ghar Region: 300 runs in 66.4 overs (405 balls), Extras 10",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752263",
+      "text": "Majeed Alam: 50 off 102 balls (4 x 4)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752270",
+      "text": "Tea: Speen Ghar Region - 331/7 in 77.0 overs (Qamar Shams 0, Majeed Alam 61)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752276",
+      "text": "Speen Ghar Region: 350 runs in 82.2 overs (499 balls), Extras 16",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752277",
+      "text": "New ball Taken at 83.0 overs",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752278",
+      "text": "Innings Break: Speen Ghar Region - 368/10 in 84.5 overs (Amanullah 19)",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752279",
+      "text": "Boost Region 2nd innings",
+      "type": "matchnote"
+    },
+    {
+      "dayNumber": "",
+      "id": "752285",
+      "text": "Boost Region: 50 runs in 11.5 overs (71 balls), Extras 0",
+      "type": "matchnote"
+    },
+    {
+      "date": "Thu, 9 Apr",
+      "dayNumber": "1",
+      "id": 212144,
+      "text": "day 1 - Speen Ghar Region 1st innings 70/1 (Usman Noori 31*, Abuzar Safi 5*, 16 ov)",
+      "type": "closeofplay"
+    }
+  ],
+  "situation": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/situation"
+  }
+}
+
+
+
+

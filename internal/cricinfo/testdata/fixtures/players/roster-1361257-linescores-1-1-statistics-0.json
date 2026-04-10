@@ -1,0 +1,208 @@
+
+{
+    "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1361257/linescores/1/1/statistics/0",
+    "competition":{
+        "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474"
+    },
+    "athlete":{
+        "$ref":"http://core.espnuk.org/v2/sports/cricket/athletes/1361257"
+    },
+    "splits":{
+        "id":"0",
+        "name":"Total",
+        "abbreviation":"Total",
+        "categories":[{
+            "name":"general",
+            "displayName":"General",
+            "shortDisplayName":"General",
+            "abbreviation":"gen",
+            "stats":[{
+                "name":"ballsFaced",
+                "displayName":"Balls Faced",
+                "shortDisplayName":"BF",
+                "description":"Balls Faced",
+                "abbreviation":"BF",
+                "value":60,
+                "displayValue":"60"
+            },{
+                "name":"batted",
+                "displayName":"Batted",
+                "shortDisplayName":"B",
+                "description":"Batted",
+                "abbreviation":"B",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"battingPosition",
+                "displayName":"Batting Position",
+                "shortDisplayName":"BP",
+                "description":"Batting Position",
+                "abbreviation":"BP",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"dismissal",
+                "displayName":"Dismissal",
+                "shortDisplayName":"D",
+                "description":"Dismissal",
+                "abbreviation":"D",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"dismissalCard",
+                "displayName":"Dismissal Card",
+                "shortDisplayName":"DC",
+                "description":"Dismissal Card",
+                "abbreviation":"DC",
+                "value":"c",
+                "displayValue":"c"
+            },{
+                "name":"ducks",
+                "displayName":"Ducks",
+                "shortDisplayName":"D",
+                "description":"Ducks",
+                "abbreviation":"D",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"fielderKeeper",
+                "displayName":"Fielder Keeper",
+                "shortDisplayName":"FK",
+                "description":"Fielder Keeper",
+                "abbreviation":"FK",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"fielderSub",
+                "displayName":"Fielder Sub",
+                "shortDisplayName":"FS",
+                "description":"Fielder Sub",
+                "abbreviation":"FS",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"fiftyPlus",
+                "displayName":"Fifty Plus",
+                "shortDisplayName":"FP",
+                "description":"Fifty Plus",
+                "abbreviation":"FP",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"fours",
+                "displayName":"Fours",
+                "shortDisplayName":"F",
+                "description":"Fours",
+                "abbreviation":"F",
+                "value":5,
+                "displayValue":"5"
+            },{
+                "name":"hundreds",
+                "displayName":"Hundreds",
+                "shortDisplayName":"H",
+                "description":"Hundreds",
+                "abbreviation":"H",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"innings",
+                "displayName":"Innings",
+                "shortDisplayName":"I",
+                "description":"Innings",
+                "abbreviation":"I",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"inningsNumber",
+                "displayName":"Innings Number",
+                "shortDisplayName":"IN",
+                "description":"Innings Number",
+                "abbreviation":"IN",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"minutes",
+                "displayName":"Minutes",
+                "shortDisplayName":"M",
+                "description":"Minutes",
+                "abbreviation":"M",
+                "value":92,
+                "displayValue":"92"
+            },{
+                "name":"notouts",
+                "displayName":"Notouts",
+                "shortDisplayName":"N",
+                "description":"Notouts",
+                "abbreviation":"N",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"outs",
+                "displayName":"Outs",
+                "shortDisplayName":"O",
+                "description":"Outs",
+                "abbreviation":"O",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"retiredDescription",
+                "displayName":"Retired Description",
+                "shortDisplayName":"RD",
+                "description":"Retired Description",
+                "abbreviation":"RD",
+                "value":0,
+                "displayValue":""
+            },{
+                "name":"runs",
+                "displayName":"Runs",
+                "shortDisplayName":"R",
+                "description":"Runs",
+                "abbreviation":"R",
+                "value":33,
+                "displayValue":"33"
+            },{
+                "name":"sixes",
+                "displayName":"Sixes",
+                "shortDisplayName":"S",
+                "description":"Sixes",
+                "abbreviation":"S",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"strikeRate",
+                "displayName":"Strike Rate",
+                "shortDisplayName":"SR",
+                "description":"Strike Rate",
+                "abbreviation":"SR",
+                "value":55,
+                "displayValue":"55"
+            }]
+        }] ,
+		
+			"batting":{
+				"active":false,
+				"activeName":"",
+				"order":1,
+				"outDetails":{"bowler":{"$ref":"http://core.espnuk.org/v2/sports/cricket/athletes/1436502","displayName":"Qamar Shams","firstName":"Qamar","fullName":"Qamar Shams","id":"1436502","lastName":"Shams"},"details":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details/52548087"},"dismissalCard":"c","fielders":[{"athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/athletes/1461324","displayName":"Jalat Khan","firstName":"Jalat","fullName":"Jalat Khan Mousa Zai","id":"1461324","lastName":"Zai"},"displayOrder":0,"isKeeper":0,"isSubstitute":0}],"shortText":"c Jalat Khan b Qamar Shams"},
+				"pvp":{
+					"balls":0,
+					"runs":0
+				},
+				"runsSummary":["45","7","3","0","5","0","0","0"],
+				"dotBallPercentage":75,
+				"battingRecent":{
+					"balls":12,
+					"overSpan":10,
+					"runs":5
+				},
+				
+				"scoringShots": 15
+                
+			}
+		
+		
+    }
+}
+
+
+

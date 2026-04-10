@@ -1,0 +1,141 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/amxv/cricinfo-cli/internal/buildinfo"
+	"github.com/spf13/cobra"
+)
+
+const commandName = "cricinfo"
+
+type globalOptions struct {
+	format    string
+	verbose   bool
+	allFields bool
+	version   bool
+}
+
+func Run(args []string, stdout, stderr io.Writer) error {
+	root := newRootCommand(stdout, stderr)
+	root.SetArgs(args)
+
+	if err := root.Execute(); err != nil {
+		return normalizeCommandError(err)
+	}
+
+	return nil
+}
+
+func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
+	opts := &globalOptions{}
+
+	root := &cobra.Command{
+		Use:                commandName,
+		Short:              "Explore Cricinfo cricket data from the command line.",
+		Long:               rootLongDescription(),
+		SilenceUsage:       true,
+		SilenceErrors:      true,
+		DisableAutoGenTag:  true,
+		DisableSuggestions: true,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			return validateFormat(opts.format)
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if opts.version {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", commandName, buildinfo.CurrentVersion())
+				return nil
+			}
+
+			return cmd.Help()
+		},
+	}
+
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+
+	root.Flags().BoolVar(&opts.version, "version", false, "Print version information")
+	root.PersistentFlags().StringVar(&opts.format, "format", "text", "Output format: text, json, or jsonl")
+	root.PersistentFlags().BoolVar(&opts.verbose, "verbose", false, "Show verbose output when available")
+	root.PersistentFlags().BoolVar(&opts.allFields, "all-fields", false, "Include long-tail fields in output")
+
+	root.AddCommand(newMatchesCommand(opts))
+	root.AddCommand(newPlayersCommand(opts))
+	root.AddCommand(newTeamsCommand(opts))
+	root.AddCommand(newLeaguesCommand(opts))
+	root.AddCommand(newSeasonsCommand(opts))
+	root.AddCommand(newStandingsCommand(opts))
+	root.AddCommand(newCompetitionsCommand(opts))
+	root.AddCommand(newSearchCommand(opts))
+	root.AddCommand(newAnalysisCommand(opts))
+
+	return root
+}
+
+func newPlaceholderGroupCommand(name, description string, nextSteps []string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   name,
+		Short: description,
+		Long: fmt.Sprintf("%s\n\n%s",
+			description,
+			formatNextSteps(nextSteps),
+		),
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
+
+	return cmd
+}
+
+func validateFormat(value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "text", "json", "jsonl":
+		return nil
+	default:
+		return fmt.Errorf("invalid value %q for --format (expected: text, json, jsonl)", value)
+	}
+}
+
+func normalizeCommandError(err error) error {
+	message := strings.TrimSpace(err.Error())
+	if message == "" {
+		return err
+	}
+
+	firstLine := strings.SplitN(message, "\n", 2)[0]
+
+	if strings.HasPrefix(firstLine, "unknown command ") || strings.HasPrefix(firstLine, "unknown flag:") {
+		return fmt.Errorf("%s (run `%s --help`)", firstLine, commandName)
+	}
+
+	return fmt.Errorf("%s", firstLine)
+}
+
+func rootLongDescription() string {
+	return strings.Join([]string{
+		"Domain-driven Cricinfo CLI for real-time match, player, team, league, season, and analysis workflows.",
+		"",
+		"Quick drill-down:",
+		"  cricinfo matches list",
+		"  cricinfo players profile 1361257",
+		"  cricinfo teams roster 789643 --match 1529474",
+		"  cricinfo leagues seasons 19138",
+		"  cricinfo analysis bowling --metric economy --scope match:1529474",
+		"",
+		"JSON output for agents:",
+		"  cricinfo matches show 1529474 --format json",
+		"  cricinfo analysis dismissals --league 19138 --seasons 2025 --format json",
+	}, "\n")
+}
+
+func formatNextSteps(commands []string) string {
+	lines := []string{"Next steps:"}
+	for _, command := range commands {
+		lines = append(lines, "  "+command)
+	}
+	return strings.Join(lines, "\n")
+}

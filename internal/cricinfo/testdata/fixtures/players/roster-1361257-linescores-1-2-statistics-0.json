@@ -1,0 +1,252 @@
+
+{
+    "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1361257/linescores/1/2/statistics/0",
+    "competition":{
+        "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474"
+    },
+    "athlete":{
+        "$ref":"http://core.espnuk.org/v2/sports/cricket/athletes/1361257"
+    },
+    "splits":{
+        "id":"0",
+        "name":"Total",
+        "abbreviation":"Total",
+        "categories":[{
+            "name":"general",
+            "displayName":"General",
+            "shortDisplayName":"General",
+            "abbreviation":"gen",
+            "stats":[{
+                "name":"balls",
+                "displayName":"Balls",
+                "shortDisplayName":"B",
+                "description":"Balls",
+                "abbreviation":"B",
+                "value":24,
+                "displayValue":"24"
+            },{
+                "name":"bowled",
+                "displayName":"Bowled",
+                "shortDisplayName":"B",
+                "description":"Bowled",
+                "abbreviation":"B",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"bowlingPosition",
+                "displayName":"Bowling Position",
+                "shortDisplayName":"BP",
+                "description":"Bowling Position",
+                "abbreviation":"BP",
+                "value":6,
+                "displayValue":"6"
+            },{
+                "name":"bpo",
+                "displayName":"Bpo",
+                "shortDisplayName":"bpo",
+                "description":"Bpo",
+                "abbreviation":"bpo",
+                "value":6,
+                "displayValue":"6"
+            },{
+                "name":"caught",
+                "displayName":"Caught",
+                "shortDisplayName":"C",
+                "description":"Caught",
+                "abbreviation":"C",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"caughtFielder",
+                "displayName":"Caught Fielder",
+                "shortDisplayName":"CF",
+                "description":"Caught Fielder",
+                "abbreviation":"CF",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"caughtKeeper",
+                "displayName":"Caught Keeper",
+                "shortDisplayName":"CK",
+                "description":"Caught Keeper",
+                "abbreviation":"CK",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"conceded",
+                "displayName":"Conceded",
+                "shortDisplayName":"C",
+                "description":"Conceded",
+                "abbreviation":"C",
+                "value":5,
+                "displayValue":"5"
+            },{
+                "name":"dismissals",
+                "displayName":"Dismissals",
+                "shortDisplayName":"D",
+                "description":"Dismissals",
+                "abbreviation":"D",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"dots",
+                "displayName":"Dots",
+                "shortDisplayName":"D",
+                "description":"Dots",
+                "abbreviation":"D",
+                "value":0,
+                "displayValue":""
+            },{
+                "name":"economyRate",
+                "displayName":"Economy Rate",
+                "shortDisplayName":"ER",
+                "description":"Economy Rate",
+                "abbreviation":"ER",
+                "value":1.25,
+                "displayValue":"1.25"
+            },{
+                "name":"fielded",
+                "displayName":"Fielded",
+                "shortDisplayName":"F",
+                "description":"Fielded",
+                "abbreviation":"F",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"fiveWickets",
+                "displayName":"Five Wickets",
+                "shortDisplayName":"FW",
+                "description":"Five Wickets",
+                "abbreviation":"FW",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"fourPlusWickets",
+                "displayName":"Four Plus Wickets",
+                "shortDisplayName":"FPW",
+                "description":"Four Plus Wickets",
+                "abbreviation":"FPW",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"foursConceded",
+                "displayName":"Fours Conceded",
+                "shortDisplayName":"FC",
+                "description":"Fours Conceded",
+                "abbreviation":"FC",
+                "value":0,
+                "displayValue":""
+            },{
+                "name":"illegalOverLimit",
+                "displayName":"Illegal Over Limit",
+                "shortDisplayName":"IOL",
+                "description":"Illegal Over Limit",
+                "abbreviation":"IOL",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"inningsBowled",
+                "displayName":"Innings Bowled",
+                "shortDisplayName":"IB",
+                "description":"Innings Bowled",
+                "abbreviation":"IB",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"inningsFielded",
+                "displayName":"Innings Fielded",
+                "shortDisplayName":"IF",
+                "description":"Innings Fielded",
+                "abbreviation":"IF",
+                "value":1,
+                "displayValue":"1"
+            },{
+                "name":"inningsNumber",
+                "displayName":"Innings Number",
+                "shortDisplayName":"IN",
+                "description":"Innings Number",
+                "abbreviation":"IN",
+                "value":2,
+                "displayValue":"2"
+            },{
+                "name":"maidens",
+                "displayName":"Maidens",
+                "shortDisplayName":"M",
+                "description":"Maidens",
+                "abbreviation":"M",
+                "value":2,
+                "displayValue":"2"
+            },{
+                "name":"noballs",
+                "displayName":"Noballs",
+                "shortDisplayName":"N",
+                "description":"Noballs",
+                "abbreviation":"N",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"overs",
+                "displayName":"Overs",
+                "shortDisplayName":"O",
+                "description":"Overs",
+                "abbreviation":"O",
+                "value":4,
+                "displayValue":"4"
+            },{
+                "name":"sixesConceded",
+                "displayName":"Sixes Conceded",
+                "shortDisplayName":"SC",
+                "description":"Sixes Conceded",
+                "abbreviation":"SC",
+                "value":0,
+                "displayValue":""
+            },{
+                "name":"stumped",
+                "displayName":"Stumped",
+                "shortDisplayName":"S",
+                "description":"Stumped",
+                "abbreviation":"S",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"tenWickets",
+                "displayName":"Ten Wickets",
+                "shortDisplayName":"TW",
+                "description":"Ten Wickets",
+                "abbreviation":"TW",
+                "value":0,
+                "displayValue":""
+            },{
+                "name":"wickets",
+                "displayName":"Wickets",
+                "shortDisplayName":"W",
+                "description":"Wickets",
+                "abbreviation":"W",
+                "value":0,
+                "displayValue":"0"
+            },{
+                "name":"wides",
+                "displayName":"Wides",
+                "shortDisplayName":"W",
+                "description":"Wides",
+                "abbreviation":"W",
+                "value":0,
+                "displayValue":"0"
+            }]
+        }] ,
+		
+		
+			"bowling":{
+				"active":false,
+				"activeName":"",
+				"order":6
+				
+				
+				
+			}
+		
+    }
+}
+
+
+
