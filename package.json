@@ -33,7 +33,9 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
     "test": "node --check bin/cricinfo.js && node --check scripts/postinstall.js",
-    "lint": "npm run test"
+    "lint": "npm run test",
+    "fixtures:refresh": "go run ./internal/cricinfo/cmd/fixture-refresh --write",
+    "test:live": "CRICINFO_LIVE_MATRIX=1 go test ./internal/cricinfo -run TestLive -count=1"
   },
   "engines": {
     "node": ">=18"

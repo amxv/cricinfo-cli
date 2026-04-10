@@ -124,6 +124,9 @@ func TestLiveSmokeValidatedRoutes(t *testing.T) {
 
 			resolved, err := client.ResolveRefChain(ctx, tc.ref)
 			if err != nil {
+				if isLive503(err) {
+					t.Skipf("skipping route after persistent 503: %s (%v)", tc.ref, err)
+				}
 				t.Fatalf("ResolveRefChain(%q) error: %v", tc.ref, err)
 			}
 			if resolved.RequestedRef == "" || resolved.CanonicalRef == "" {

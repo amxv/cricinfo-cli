@@ -1,0 +1,30 @@
+{
+  "count": 6,
+  "pageIndex": 1,
+  "pageSize": 300,
+  "pageCount": 1,
+  "items": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1529471/seasons/2026"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1479935/seasons/2025"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1434012/seasons/2024"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1378163/seasons/2023"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1317690/seasons/2022"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1174248/seasons/2019"
+    }
+  ]
+}
+
+
+
+

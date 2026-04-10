@@ -1,0 +1,126 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes//statistics",
+  "athlete": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/"
+  },
+  "splits": {
+    "id": "0",
+    "name": "Total",
+    "abbreviation": "Total",
+    "categories": [
+      {
+        "name": "general",
+        "displayName": "General",
+        "shortDisplayName": "General",
+        "abbreviation": "gen",
+        "summary": "",
+        "stats": [
+          {
+            "name": "matches",
+            "displayName": "Matches",
+            "shortDisplayName": "Matches",
+            "description": "Matches",
+            "abbreviation": "M",
+            "value": 0,
+            "displayValue": "0"
+          },
+          {
+            "name": "runs",
+            "displayName": "Runs",
+            "shortDisplayName": "Runs",
+            "description": "Runs",
+            "abbreviation": "R",
+            "value": 0,
+            "displayValue": "-"
+          },
+          {
+            "name": "conceded",
+            "displayName": "Conceded",
+            "shortDisplayName": "Conceded",
+            "description": "Conceded",
+            "abbreviation": "R",
+            "value": 0,
+            "displayValue": "-"
+          },
+          {
+            "name": "battingAverage",
+            "displayName": "Batting Average",
+            "shortDisplayName": "Batting Average",
+            "description": "Batting Average",
+            "abbreviation": "BTA",
+            "value": 0,
+            "displayValue": "-"
+          },
+          {
+            "name": "highScore",
+            "displayName": "High Score",
+            "shortDisplayName": "High Score",
+            "description": "High Score",
+            "abbreviation": "HS",
+            "value": 0,
+            "displayValue": "-"
+          },
+          {
+            "name": "battingStrikeRate",
+            "displayName": "Batting Strike Rate",
+            "shortDisplayName": "Batting Strike Rate",
+            "description": "Batting Strike Rate",
+            "abbreviation": "BTSR",
+            "value": 0,
+            "displayValue": "0"
+          },
+          {
+            "name": "wickets",
+            "displayName": "Wickets",
+            "shortDisplayName": "Wickets",
+            "description": "Wickets",
+            "abbreviation": "W",
+            "value": 0,
+            "displayValue": ""
+          },
+          {
+            "name": "bowlingAverage",
+            "displayName": "Bowling Average",
+            "shortDisplayName": "Bowling Average",
+            "description": "Bowling Average",
+            "abbreviation": "BWA",
+            "value": 0,
+            "displayValue": "-"
+          },
+          {
+            "name": "bowlingStrikeRate",
+            "displayName": "Bowling Strike Rate",
+            "shortDisplayName": "Bowling Strike Rate",
+            "description": "Bowling Strike Rate",
+            "abbreviation": "BWSR",
+            "value": 0,
+            "displayValue": "0"
+          },
+          {
+            "name": "bestBowlingFigures",
+            "displayName": "Best Bowling Figures",
+            "shortDisplayName": "Best Bowling Figures",
+            "description": "Best Bowling Figures",
+            "abbreviation": "BBI",
+            "value": 0,
+            "displayValue": "-"
+          },
+          {
+            "name": "economyRate",
+            "displayName": "Economy Rate",
+            "shortDisplayName": "Economy Rate",
+            "description": "Economy Rate",
+            "abbreviation": "ER",
+            "value": 0,
+            "displayValue": "0"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+
+
+
+

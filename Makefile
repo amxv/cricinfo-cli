@@ -9,7 +9,7 @@ BIN_PATH ?= $(DIST_DIR)/$(BIN_NAME)
 VERSION ?= $(shell node -p "require('./package.json').version" 2>/dev/null)
 LDFLAGS ?= -s -w -X github.com/amxv/cricinfo-cli/internal/buildinfo.Version=$(if $(VERSION),$(VERSION),dev)
 
-.PHONY: help fmt test vet lint check build build-all install-local clean release-tag
+.PHONY: help fmt test test-live fixtures-refresh vet lint check build build-all install-local clean release-tag
 
 help:
 	@echo "cricinfo command runner"
@@ -17,6 +17,8 @@ help:
 	@echo "Targets:"
 	@echo "  make fmt          - format Go files"
 	@echo "  make test         - run go test ./..."
+	@echo "  make test-live    - run opt-in live Cricinfo matrix tests"
+	@echo "  make fixtures-refresh - refresh curated live fixtures into testdata"
 	@echo "  make vet          - run go vet ./..."
 	@echo "  make lint         - run Node script checks"
 	@echo "  make check        - fmt + test + vet + lint"
@@ -31,6 +33,12 @@ fmt:
 
 test:
 	@$(GO) test ./...
+
+test-live:
+	@CRICINFO_LIVE_MATRIX=1 $(GO) test ./internal/cricinfo -run 'TestLive' -count=1
+
+fixtures-refresh:
+	@$(GO) run ./internal/cricinfo/cmd/fixture-refresh --write
 
 vet:
 	@$(GO) vet ./...

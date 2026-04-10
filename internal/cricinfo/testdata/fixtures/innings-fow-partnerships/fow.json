@@ -1,0 +1,42 @@
+{
+  "count": 1,
+  "pageIndex": 1,
+  "pageSize": 25,
+  "pageCount": 1,
+  "items": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/1"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/2"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/3"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/4"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/5"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/6"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/7"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/8"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/9"
+    },
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow/10"
+    }
+  ]
+}
+
+
+
+

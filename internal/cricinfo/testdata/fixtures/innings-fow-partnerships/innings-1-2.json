@@ -1,0 +1,38 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2",
+  "period": 2,
+  "value": 2,
+  "displayValue": 2,
+  "source": {
+    "description": "Dougie",
+    "id": 1
+  },
+  "wickets": 10,
+  "runs": 182,
+  "overs": 42.4,
+  "isBatting": true,
+  "fours": 19,
+  "sixes": 3,
+  "score": "182 (42.4/50 ov, target 209)",
+  "description": "all out",
+  "isCurrent": 1,
+  "target": 209,
+  "followOn": 0,
+  "statistics": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/statistics/0"
+  },
+  "leaders": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/leaders"
+  },
+  "partnerships": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/partnerships"
+  },
+  "fow": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1098952/events/1475396/competitions/1475396/competitors/1147772/linescores/1/2/fow"
+  }
+}
+
+
+
+
+
