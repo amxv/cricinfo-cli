@@ -334,6 +334,25 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 			return joinParts("situation", data)
 		}
 		return joinParts("situation", valueString(entity, "competitionId"))
+	case EntityCompetition:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "shortDescription"), valueString(entity, "description"), valueString(entity, "id")),
+			matchTeamsLabel(entity),
+			valueString(entity, "matchState"),
+		)
+	case EntityCompOfficial, EntityCompBroadcast, EntityCompTicket, EntityCompOdds:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "name"), valueString(entity, "text"), valueString(entity, "value"), valueString(entity, "id")),
+			valueString(entity, "role"),
+			valueString(entity, "type"),
+		)
+	case EntityCompMetadata:
+		return joinParts(
+			"officials "+fmt.Sprintf("%d", len(sliceValue(entity, "officials"))),
+			"broadcasts "+fmt.Sprintf("%d", len(sliceValue(entity, "broadcasts"))),
+			"tickets "+fmt.Sprintf("%d", len(sliceValue(entity, "tickets"))),
+			"odds "+fmt.Sprintf("%d", len(sliceValue(entity, "odds"))),
+		)
 	case EntityPlayer:
 		return joinParts(firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "fullName"), valueString(entity, "name")), bracket(valueString(entity, "id")))
 	case EntityPlayerStats:
@@ -454,6 +473,23 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 			"description", "shortDescription", "matchState",
 			"date", "endDate", "venueName", "venueSummary", "scoreSummary",
 			"statusRef", "detailsRef", "teams",
+		}
+	case EntityCompetition:
+		order = []string{
+			"id", "competitionId", "eventId", "leagueId",
+			"description", "shortDescription", "matchState",
+			"date", "endDate", "venueName", "venueSummary", "scoreSummary",
+			"statusRef", "detailsRef", "matchcardsRef", "situationRef",
+			"officialsRef", "broadcastsRef", "ticketsRef", "oddsRef",
+			"teams",
+		}
+	case EntityCompOfficial, EntityCompBroadcast, EntityCompTicket, EntityCompOdds:
+		order = []string{
+			"id", "displayName", "name", "role", "type", "order", "text", "value", "href",
+		}
+	case EntityCompMetadata:
+		order = []string{
+			"competition", "officials", "broadcasts", "tickets", "odds",
 		}
 	case EntityPlayer:
 		order = []string{

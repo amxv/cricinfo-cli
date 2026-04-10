@@ -67,14 +67,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	root.AddCommand(newLeaguesCommand(opts))
 	root.AddCommand(newSeasonsCommand(opts))
 	root.AddCommand(newStandingsCommand(opts))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"competitions",
-		"Competition metadata including officials, broadcasts, and odds.",
-		[]string{
-			"cricinfo competitions --help",
-			"cricinfo matches --help",
-		},
-	))
+	root.AddCommand(newCompetitionsCommand(opts))
 	root.AddCommand(newSearchCommand(opts))
 	root.AddCommand(newPlaceholderGroupCommand(
 		"analysis",

@@ -16,6 +16,12 @@ const (
 	EntityMatch           EntityKind = "match"
 	EntityMatchScorecard  EntityKind = "match_scorecard"
 	EntityMatchSituation  EntityKind = "match_situation"
+	EntityCompetition     EntityKind = "competition"
+	EntityCompOfficial    EntityKind = "competition_official"
+	EntityCompBroadcast   EntityKind = "competition_broadcast"
+	EntityCompTicket      EntityKind = "competition_ticket"
+	EntityCompOdds        EntityKind = "competition_odds"
+	EntityCompMetadata    EntityKind = "competition_metadata"
 	EntityPlayer          EntityKind = "player"
 	EntityPlayerStats     EntityKind = "player_statistics"
 	EntityPlayerMatch     EntityKind = "player_match"
@@ -179,6 +185,57 @@ type MatchSituation struct {
 	OddsRef       string         `json:"oddsRef,omitempty"`
 	Data          map[string]any `json:"data,omitempty"`
 	Extensions    map[string]any `json:"extensions,omitempty"`
+}
+
+// Competition is the normalized competition metadata root view.
+type Competition struct {
+	Ref              string         `json:"ref,omitempty"`
+	ID               string         `json:"id,omitempty"`
+	LeagueID         string         `json:"leagueId,omitempty"`
+	EventID          string         `json:"eventId,omitempty"`
+	CompetitionID    string         `json:"competitionId,omitempty"`
+	Description      string         `json:"description,omitempty"`
+	ShortDescription string         `json:"shortDescription,omitempty"`
+	Date             string         `json:"date,omitempty"`
+	EndDate          string         `json:"endDate,omitempty"`
+	MatchState       string         `json:"matchState,omitempty"`
+	VenueName        string         `json:"venueName,omitempty"`
+	VenueSummary     string         `json:"venueSummary,omitempty"`
+	ScoreSummary     string         `json:"scoreSummary,omitempty"`
+	StatusRef        string         `json:"statusRef,omitempty"`
+	DetailsRef       string         `json:"detailsRef,omitempty"`
+	MatchcardsRef    string         `json:"matchcardsRef,omitempty"`
+	SituationRef     string         `json:"situationRef,omitempty"`
+	OfficialsRef     string         `json:"officialsRef,omitempty"`
+	BroadcastsRef    string         `json:"broadcastsRef,omitempty"`
+	TicketsRef       string         `json:"ticketsRef,omitempty"`
+	OddsRef          string         `json:"oddsRef,omitempty"`
+	Teams            []Team         `json:"teams,omitempty"`
+	Extensions       map[string]any `json:"extensions,omitempty"`
+}
+
+// CompetitionMetadataEntry is a normalized row from officials/broadcasts/tickets/odds resources.
+type CompetitionMetadataEntry struct {
+	Ref         string         `json:"ref,omitempty"`
+	ID          string         `json:"id,omitempty"`
+	DisplayName string         `json:"displayName,omitempty"`
+	Name        string         `json:"name,omitempty"`
+	Role        string         `json:"role,omitempty"`
+	Type        string         `json:"type,omitempty"`
+	Order       int            `json:"order,omitempty"`
+	Text        string         `json:"text,omitempty"`
+	Value       string         `json:"value,omitempty"`
+	Href        string         `json:"href,omitempty"`
+	Extensions  map[string]any `json:"extensions,omitempty"`
+}
+
+// CompetitionMetadataSummary aggregates auxiliary competition metadata routes.
+type CompetitionMetadataSummary struct {
+	Competition Competition                `json:"competition"`
+	Officials   []CompetitionMetadataEntry `json:"officials,omitempty"`
+	Broadcasts  []CompetitionMetadataEntry `json:"broadcasts,omitempty"`
+	Tickets     []CompetitionMetadataEntry `json:"tickets,omitempty"`
+	Odds        []CompetitionMetadataEntry `json:"odds,omitempty"`
 }
 
 // Player is the normalized core player shape.
@@ -807,6 +864,18 @@ func kindPlural(kind EntityKind) string {
 		return "match scorecards"
 	case EntityMatchSituation:
 		return "match situations"
+	case EntityCompetition:
+		return "competitions"
+	case EntityCompOfficial:
+		return "competition officials"
+	case EntityCompBroadcast:
+		return "competition broadcasts"
+	case EntityCompTicket:
+		return "competition tickets"
+	case EntityCompOdds:
+		return "competition odds"
+	case EntityCompMetadata:
+		return "competition metadata views"
 	case EntityPlayer:
 		return "players"
 	case EntityPlayerStats:
