@@ -117,14 +117,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 			"cricinfo matches --help",
 		},
 	))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"search",
-		"Cross-entity discovery for matches, players, teams, and leagues.",
-		[]string{
-			"cricinfo search --help",
-			"cricinfo players --help",
-		},
-	))
+	root.AddCommand(newSearchCommand(opts))
 	root.AddCommand(newPlaceholderGroupCommand(
 		"analysis",
 		"Derived cricket analysis over normalized command output.",

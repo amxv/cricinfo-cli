@@ -102,3 +102,21 @@ func TestRunRejectsUnknownFormat(t *testing.T) {
 		t.Fatalf("unexpected invalid format error: %v", err)
 	}
 }
+
+func TestRunSearchGroupHelp(t *testing.T) {
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+
+	err := Run([]string{"search", "--help"}, &out, &errBuf)
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	help := out.String()
+	if !strings.Contains(help, "players") || !strings.Contains(help, "teams") || !strings.Contains(help, "leagues") || !strings.Contains(help, "matches") {
+		t.Fatalf("expected entity search subcommands in help output, got: %q", help)
+	}
+	if !strings.Contains(help, "--league") || !strings.Contains(help, "--match") {
+		t.Fatalf("expected search context flags in help output, got: %q", help)
+	}
+}

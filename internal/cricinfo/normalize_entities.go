@@ -446,6 +446,22 @@ func stringField(payload map[string]any, key string) string {
 	switch typed := value.(type) {
 	case string:
 		return strings.TrimSpace(typed)
+	case float64:
+		if typed == float64(int64(typed)) {
+			return strconv.FormatInt(int64(typed), 10)
+		}
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case float32:
+		if typed == float32(int64(typed)) {
+			return strconv.FormatInt(int64(typed), 10)
+		}
+		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(typed)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case json.Number:
+		return strings.TrimSpace(typed.String())
 	case fmt.Stringer:
 		return strings.TrimSpace(typed.String())
 	default:
