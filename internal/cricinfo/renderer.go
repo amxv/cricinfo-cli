@@ -338,6 +338,28 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		return joinParts(firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "fullName"), valueString(entity, "name")), bracket(valueString(entity, "id")))
 	case EntityPlayerStats:
 		return joinParts(firstNonEmpty(valueString(entity, "name"), "statistics"), fmt.Sprintf("%d categories", len(sliceValue(entity, "categories"))))
+	case EntityPlayerMatch:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "playerName"), valueString(entity, "playerId")),
+			"match "+valueString(entity, "matchId"),
+			"bat "+fmt.Sprintf("%d", len(sliceValue(entity, "batting"))),
+			"bowl "+fmt.Sprintf("%d", len(sliceValue(entity, "bowling"))),
+		)
+	case EntityPlayerInnings:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "playerName"), valueString(entity, "playerId")),
+			"innings "+valueString(entity, "inningsNumber")+"/"+valueString(entity, "period"),
+			firstNonEmpty(valueString(entity, "teamName"), valueString(entity, "teamId")),
+		)
+	case EntityPlayerDismissal:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "dismissalName"), valueString(entity, "dismissalType")),
+			firstNonEmpty(valueString(entity, "dismissalCard"), valueString(entity, "fow")),
+			valueString(entity, "detailRef"),
+		)
+	case EntityPlayerDelivery:
+		short := firstNonEmpty(valueString(entity, "shortText"), valueString(entity, "text"))
+		return joinParts(short, valueString(entity, "involvement"), valueString(entity, "id"))
 	case EntityNewsArticle:
 		return joinParts(firstNonEmpty(valueString(entity, "headline"), valueString(entity, "title"), valueString(entity, "id")), valueString(entity, "published"), valueString(entity, "byline"))
 	case EntityTeam:
@@ -424,6 +446,32 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 		}
 	case EntityPlayerStats:
 		order = []string{"playerId", "name", "abbreviation", "splitId", "categories"}
+	case EntityPlayerMatch:
+		order = []string{
+			"playerId", "playerName", "matchId", "teamId", "teamName",
+			"statisticsRef", "linescoresRef", "summary", "batting", "bowling", "fielding",
+		}
+	case EntityPlayerInnings:
+		order = []string{
+			"playerId", "playerName", "matchId", "teamId", "teamName",
+			"inningsNumber", "period", "order", "isBatting", "statisticsRef", "summary",
+			"batting", "bowling", "fielding",
+		}
+	case EntityPlayerDismissal:
+		order = []string{
+			"playerId", "playerName", "matchId", "teamId", "teamName",
+			"inningsNumber", "period", "wicketNumber", "fow", "over",
+			"dismissalName", "dismissalCard", "dismissalType", "dismissalText",
+			"ballsFaced", "strikeRate", "batsmanPlayerId", "bowlerPlayerId", "fielderPlayerId",
+			"detailRef", "detailShortText",
+		}
+	case EntityPlayerDelivery:
+		order = []string{
+			"id", "matchId", "teamId", "period", "overNumber", "ballNumber", "scoreValue",
+			"shortText", "dismissalType", "dismissalName", "dismissalCard",
+			"batsmanPlayerId", "bowlerPlayerId", "fielderPlayerId",
+			"xCoordinate", "yCoordinate", "involvement",
+		}
 	case EntityNewsArticle:
 		order = []string{"id", "headline", "title", "byline", "published", "description", "webUrl"}
 	case EntityTeam:

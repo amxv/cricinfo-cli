@@ -13,26 +13,30 @@ import (
 type EntityKind string
 
 const (
-	EntityMatch          EntityKind = "match"
-	EntityMatchScorecard EntityKind = "match_scorecard"
-	EntityMatchSituation EntityKind = "match_situation"
-	EntityPlayer         EntityKind = "player"
-	EntityPlayerStats    EntityKind = "player_statistics"
-	EntityNewsArticle    EntityKind = "news_article"
-	EntityTeam           EntityKind = "team"
-	EntityTeamRoster     EntityKind = "team_roster"
-	EntityTeamScore      EntityKind = "team_score"
-	EntityTeamLeaders    EntityKind = "team_leaders"
-	EntityTeamStatistics EntityKind = "team_statistics"
-	EntityTeamRecords    EntityKind = "team_records"
-	EntityLeague         EntityKind = "league"
-	EntitySeason         EntityKind = "season"
-	EntityStandingsGroup EntityKind = "standings_group"
-	EntityInnings        EntityKind = "innings"
-	EntityDeliveryEvent  EntityKind = "delivery_event"
-	EntityStatCategory   EntityKind = "stat_category"
-	EntityPartnership    EntityKind = "partnership"
-	EntityFallOfWicket   EntityKind = "fall_of_wicket"
+	EntityMatch           EntityKind = "match"
+	EntityMatchScorecard  EntityKind = "match_scorecard"
+	EntityMatchSituation  EntityKind = "match_situation"
+	EntityPlayer          EntityKind = "player"
+	EntityPlayerStats     EntityKind = "player_statistics"
+	EntityPlayerMatch     EntityKind = "player_match"
+	EntityPlayerInnings   EntityKind = "player_innings"
+	EntityPlayerDismissal EntityKind = "player_dismissal"
+	EntityPlayerDelivery  EntityKind = "player_delivery"
+	EntityNewsArticle     EntityKind = "news_article"
+	EntityTeam            EntityKind = "team"
+	EntityTeamRoster      EntityKind = "team_roster"
+	EntityTeamScore       EntityKind = "team_score"
+	EntityTeamLeaders     EntityKind = "team_leaders"
+	EntityTeamStatistics  EntityKind = "team_statistics"
+	EntityTeamRecords     EntityKind = "team_records"
+	EntityLeague          EntityKind = "league"
+	EntitySeason          EntityKind = "season"
+	EntityStandingsGroup  EntityKind = "standings_group"
+	EntityInnings         EntityKind = "innings"
+	EntityDeliveryEvent   EntityKind = "delivery_event"
+	EntityStatCategory    EntityKind = "stat_category"
+	EntityPartnership     EntityKind = "partnership"
+	EntityFallOfWicket    EntityKind = "fall_of_wicket"
 )
 
 // ResultStatus standardizes output states across render formats.
@@ -239,6 +243,95 @@ type PlayerStatistics struct {
 	Extensions   map[string]any `json:"extensions,omitempty"`
 }
 
+// PlayerMatch summarizes player-in-match context from roster stats and innings/detail routes.
+type PlayerMatch struct {
+	PlayerID      string             `json:"playerId,omitempty"`
+	PlayerRef     string             `json:"playerRef,omitempty"`
+	PlayerName    string             `json:"playerName,omitempty"`
+	MatchID       string             `json:"matchId,omitempty"`
+	CompetitionID string             `json:"competitionId,omitempty"`
+	EventID       string             `json:"eventId,omitempty"`
+	LeagueID      string             `json:"leagueId,omitempty"`
+	TeamID        string             `json:"teamId,omitempty"`
+	TeamName      string             `json:"teamName,omitempty"`
+	StatisticsRef string             `json:"statisticsRef,omitempty"`
+	LinescoresRef string             `json:"linescoresRef,omitempty"`
+	Batting       []StatCategory     `json:"batting,omitempty"`
+	Bowling       []StatCategory     `json:"bowling,omitempty"`
+	Fielding      []StatCategory     `json:"fielding,omitempty"`
+	Summary       PlayerMatchSummary `json:"summary,omitempty"`
+	Extensions    map[string]any     `json:"extensions,omitempty"`
+}
+
+// PlayerMatchSummary exposes high-value batting/bowling and dismissal fields for agent reasoning.
+type PlayerMatchSummary struct {
+	DismissalName   string  `json:"dismissalName,omitempty"`
+	DismissalCard   string  `json:"dismissalCard,omitempty"`
+	BallsFaced      int     `json:"ballsFaced,omitempty"`
+	StrikeRate      float64 `json:"strikeRate,omitempty"`
+	Dots            int     `json:"dots,omitempty"`
+	EconomyRate     float64 `json:"economyRate,omitempty"`
+	Maidens         int     `json:"maidens,omitempty"`
+	FoursConceded   int     `json:"foursConceded,omitempty"`
+	SixesConceded   int     `json:"sixesConceded,omitempty"`
+	Wides           int     `json:"wides,omitempty"`
+	Noballs         int     `json:"noballs,omitempty"`
+	BowlerPlayerID  string  `json:"bowlerPlayerId,omitempty"`
+	FielderPlayerID string  `json:"fielderPlayerId,omitempty"`
+}
+
+// PlayerInnings is a normalized player-specific innings split row.
+type PlayerInnings struct {
+	Ref           string             `json:"ref,omitempty"`
+	PlayerID      string             `json:"playerId,omitempty"`
+	PlayerName    string             `json:"playerName,omitempty"`
+	MatchID       string             `json:"matchId,omitempty"`
+	CompetitionID string             `json:"competitionId,omitempty"`
+	EventID       string             `json:"eventId,omitempty"`
+	LeagueID      string             `json:"leagueId,omitempty"`
+	TeamID        string             `json:"teamId,omitempty"`
+	TeamName      string             `json:"teamName,omitempty"`
+	InningsNumber int                `json:"inningsNumber,omitempty"`
+	Period        int                `json:"period,omitempty"`
+	Order         int                `json:"order,omitempty"`
+	IsBatting     bool               `json:"isBatting"`
+	StatisticsRef string             `json:"statisticsRef,omitempty"`
+	Batting       []StatCategory     `json:"batting,omitempty"`
+	Bowling       []StatCategory     `json:"bowling,omitempty"`
+	Fielding      []StatCategory     `json:"fielding,omitempty"`
+	Summary       PlayerMatchSummary `json:"summary,omitempty"`
+	Extensions    map[string]any     `json:"extensions,omitempty"`
+}
+
+// PlayerDismissal is a dismissal-focused first-class output view.
+type PlayerDismissal struct {
+	PlayerID        string  `json:"playerId,omitempty"`
+	PlayerName      string  `json:"playerName,omitempty"`
+	MatchID         string  `json:"matchId,omitempty"`
+	CompetitionID   string  `json:"competitionId,omitempty"`
+	EventID         string  `json:"eventId,omitempty"`
+	LeagueID        string  `json:"leagueId,omitempty"`
+	TeamID          string  `json:"teamId,omitempty"`
+	TeamName        string  `json:"teamName,omitempty"`
+	InningsNumber   int     `json:"inningsNumber,omitempty"`
+	Period          int     `json:"period,omitempty"`
+	WicketNumber    int     `json:"wicketNumber,omitempty"`
+	FOW             string  `json:"fow,omitempty"`
+	Over            string  `json:"over,omitempty"`
+	DetailRef       string  `json:"detailRef,omitempty"`
+	DetailShortText string  `json:"detailShortText,omitempty"`
+	DetailText      string  `json:"detailText,omitempty"`
+	DismissalName   string  `json:"dismissalName,omitempty"`
+	DismissalCard   string  `json:"dismissalCard,omitempty"`
+	DismissalType   string  `json:"dismissalType,omitempty"`
+	DismissalText   string  `json:"dismissalText,omitempty"`
+	BallsFaced      int     `json:"ballsFaced,omitempty"`
+	StrikeRate      float64 `json:"strikeRate,omitempty"`
+	BatsmanPlayerID string  `json:"batsmanPlayerId,omitempty"`
+	BowlerPlayerID  string  `json:"bowlerPlayerId,omitempty"`
+	FielderPlayerID string  `json:"fielderPlayerId,omitempty"`
+}
+
 // NewsArticle is a normalized Cricinfo article/story payload.
 type NewsArticle struct {
 	Ref          string         `json:"ref,omitempty"`
@@ -443,6 +536,7 @@ type InningsWicket struct {
 	Runs            int            `json:"runs,omitempty"`
 	RunsScored      int            `json:"runsScored,omitempty"`
 	BallsFaced      int            `json:"ballsFaced,omitempty"`
+	StrikeRate      float64        `json:"strikeRate,omitempty"`
 	DismissalCard   string         `json:"dismissalCard,omitempty"`
 	ShortText       string         `json:"shortText,omitempty"`
 	DetailRef       string         `json:"detailRef,omitempty"`
@@ -454,31 +548,43 @@ type InningsWicket struct {
 
 // DeliveryEvent is the normalized ball-level event shape.
 type DeliveryEvent struct {
-	Ref           string         `json:"ref,omitempty"`
-	ID            string         `json:"id,omitempty"`
-	Period        int            `json:"period,omitempty"`
-	PeriodText    string         `json:"periodText,omitempty"`
-	OverNumber    int            `json:"overNumber,omitempty"`
-	BallNumber    int            `json:"ballNumber,omitempty"`
-	ScoreValue    int            `json:"scoreValue,omitempty"`
-	ShortText     string         `json:"shortText,omitempty"`
-	Text          string         `json:"text,omitempty"`
-	HomeScore     string         `json:"homeScore,omitempty"`
-	AwayScore     string         `json:"awayScore,omitempty"`
-	BatsmanRef    string         `json:"batsmanRef,omitempty"`
-	BowlerRef     string         `json:"bowlerRef,omitempty"`
-	PlayType      map[string]any `json:"playType,omitempty"`
-	Dismissal     map[string]any `json:"dismissal,omitempty"`
-	DismissalType string         `json:"dismissalType,omitempty"`
-	DismissalText string         `json:"dismissalText,omitempty"`
-	SpeedKPH      float64        `json:"speedKPH,omitempty"`
-	XCoordinate   *float64       `json:"xCoordinate"`
-	YCoordinate   *float64       `json:"yCoordinate"`
-	BBBTimestamp  int64          `json:"bbbTimestamp"`
-	CoordinateX   *float64       `json:"coordinateX,omitempty"`
-	CoordinateY   *float64       `json:"coordinateY,omitempty"`
-	Timestamp     int64          `json:"timestamp,omitempty"`
-	Extensions    map[string]any `json:"extensions,omitempty"`
+	Ref              string         `json:"ref,omitempty"`
+	ID               string         `json:"id,omitempty"`
+	LeagueID         string         `json:"leagueId,omitempty"`
+	EventID          string         `json:"eventId,omitempty"`
+	CompetitionID    string         `json:"competitionId,omitempty"`
+	MatchID          string         `json:"matchId,omitempty"`
+	TeamID           string         `json:"teamId,omitempty"`
+	Period           int            `json:"period,omitempty"`
+	PeriodText       string         `json:"periodText,omitempty"`
+	OverNumber       int            `json:"overNumber,omitempty"`
+	BallNumber       int            `json:"ballNumber,omitempty"`
+	ScoreValue       int            `json:"scoreValue,omitempty"`
+	ShortText        string         `json:"shortText,omitempty"`
+	Text             string         `json:"text,omitempty"`
+	HomeScore        string         `json:"homeScore,omitempty"`
+	AwayScore        string         `json:"awayScore,omitempty"`
+	BatsmanRef       string         `json:"batsmanRef,omitempty"`
+	BowlerRef        string         `json:"bowlerRef,omitempty"`
+	BatsmanPlayerID  string         `json:"batsmanPlayerId,omitempty"`
+	BowlerPlayerID   string         `json:"bowlerPlayerId,omitempty"`
+	FielderPlayerID  string         `json:"fielderPlayerId,omitempty"`
+	AthletePlayerIDs []string       `json:"athletePlayerIds,omitempty"`
+	Involvement      []string       `json:"involvement,omitempty"`
+	PlayType         map[string]any `json:"playType,omitempty"`
+	Dismissal        map[string]any `json:"dismissal,omitempty"`
+	DismissalType    string         `json:"dismissalType,omitempty"`
+	DismissalName    string         `json:"dismissalName,omitempty"`
+	DismissalCard    string         `json:"dismissalCard,omitempty"`
+	DismissalText    string         `json:"dismissalText,omitempty"`
+	SpeedKPH         float64        `json:"speedKPH,omitempty"`
+	XCoordinate      *float64       `json:"xCoordinate"`
+	YCoordinate      *float64       `json:"yCoordinate"`
+	BBBTimestamp     int64          `json:"bbbTimestamp"`
+	CoordinateX      *float64       `json:"coordinateX,omitempty"`
+	CoordinateY      *float64       `json:"coordinateY,omitempty"`
+	Timestamp        int64          `json:"timestamp,omitempty"`
+	Extensions       map[string]any `json:"extensions,omitempty"`
 }
 
 // StatCategory is the normalized grouped statistics shape.
@@ -661,6 +767,14 @@ func kindPlural(kind EntityKind) string {
 		return "players"
 	case EntityPlayerStats:
 		return "player statistics"
+	case EntityPlayerMatch:
+		return "player match views"
+	case EntityPlayerInnings:
+		return "player innings"
+	case EntityPlayerDismissal:
+		return "player dismissals"
+	case EntityPlayerDelivery:
+		return "player deliveries"
 	case EntityNewsArticle:
 		return "news articles"
 	case EntityTeam:

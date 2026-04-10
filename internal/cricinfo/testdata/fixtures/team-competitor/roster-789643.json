@@ -1,0 +1,322 @@
+
+{
+    "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643",
+    "entries":[
+            {
+                "captain":false,
+                "playerId":1361257,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1361257"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1361257/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1291031,
+                "period": 0,
+                "active": true,
+				"mediaId": 0,
+                
+                    "activeName": "striker",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1291031"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1291031/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1076568,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1076568"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1076568/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1082531,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1082531"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1082531/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":true,
+                "playerId":1108510,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1108510"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/WK"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1108510/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1361459,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1361459"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1361459/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1076674,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1076674"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1076674/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1530033,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1530033"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1530033/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1479454,
+                "period": 0,
+                "active": true,
+				"mediaId": 0,
+                
+                    "activeName": "non-striker",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1479454"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/BL"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1479454/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1304656,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1304656"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/BL"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1304656/linescores"
+                }
+		
+            }
+        ,
+            {
+                "captain":false,
+                "playerId":1530034,
+                "period": 0,
+                "active": false,
+				"mediaId": 0,
+                
+                    "activeName": "player",
+                
+                "starter": true,
+                "forPlayerId": 0,
+                "valid": true,
+                
+                "athlete": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/athletes/1530034"
+                },
+		
+                "position": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/positions/UKN"
+                },
+		
+		
+                "linescores": {
+                    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/roster/1530034/linescores"
+                }
+		
+            }
+        ],
+    "competition":{
+        "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474"
+    },
+    "team":{
+        "$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643"
+    }
+}
+
+
+

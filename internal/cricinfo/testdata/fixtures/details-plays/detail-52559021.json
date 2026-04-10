@@ -1,0 +1,143 @@
+
+{
+    "$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details/52559021",
+    "id":"52559021",
+    "uid":"s:200~e:1529474~c:1529474~d:52559021",
+    "clock":"00:00",
+    "date":"2026-4-09 10:00:00",
+    "playType":{
+        "id":"9",
+        "description":"out"
+    },
+    "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643"},
+	"mediaId": 0,
+    "period":3,
+    "periodText":"3rd innings",
+    "shortPeriodText":"3rd innings",
+    "xCoordinate":null,
+    "yCoordinate":null,
+    "preText":"",
+    "text":"",
+    "postText":"",
+    "shortText":"Abuzar Safi to Fazal Haq Shaheen, OUT",
+    "homeScore":"0",
+    "awayScore":"0",
+    "scoreValue":0,
+    "sequence":301404,
+    "athletesInvolved":[
+                {"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"}
+            ,
+                {"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1479306"}
+            ]
+    ,
+            "hawkeyeId":null,
+            "boundary":false,
+            "speedKPH":null,
+            "speedMPH":null,
+            "bowler":{
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1479306"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789647/"},
+                "maidens":0,
+                "balls":4,
+                "wickets":1,
+                "overs":0.4,
+                "conceded":0
+            },
+            "otherBowler":{
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1436502"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789647/"},
+                "maidens":0,
+                "balls":6,
+                "wickets":0,
+                "overs":1.0,
+                "conceded":4
+            },
+            "batsman":
+                {
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643/"},
+                "totalRuns":5,
+                "faced":12,
+                "fours":1,
+                "runs":0,
+                "sixes":0
+            },
+            "otherBatsman":
+                {
+                "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1291031"},
+                "team":{"$ref":"http://core.espnuk.org/v2/sports/cricket/teams/789643/"},
+                "totalRuns":40,
+                "faced":49,
+                "fours":5,
+                "runs":0,
+                "sixes":1
+            },
+            "innings":{
+                "id":"286863",
+                "runRate":3.75,
+                "remainingBalls":0,
+                "byes":0,
+                "number":3,
+                "balls":88,
+                "noBalls":0,
+                "requiredRunRate":null,
+                "wickets":2,
+                "legByes":0,
+                "ballLimit":0,
+                "target":0,
+                "session":0,
+                "day":0,
+                "fallOfWickets":2,
+                "trailBy":0,
+                "leadBy":6,
+                "remainingRuns":null,
+                "remainingOvers":0.0,
+                "totalRuns":0,
+                "wides":0,
+                "runs":55
+            },
+            "over":{
+                "ball":4,
+                "balls":6,
+                "complete":false,
+                "limit":0.0,
+                "maiden":0,
+                "noBall":0,
+                "wide":0,
+                "legByes":0,
+                "byes":0,
+                "number":15,
+                "runs":2,
+                "wickets":1,
+                "overs":14.4,
+                "actual":14.4,
+                "unique":14.04
+            },
+            "dismissal":{
+                "dismissal":true,
+                "bowled":true,
+                "type":"leg before wicket",
+                "bowler":{
+                    "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1479306"}
+                },
+                "batsman":{
+                    "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/1361257"}
+                },
+                
+                "fielder":{
+                    "athlete":{"$ref":"http://core.espnuk.org/v2/sports/cricket/leagues/19138/athletes/0"},
+                    "isKeeper":false
+                },
+                
+                "text":"Fazal Haq Shaheen lbw b Abuzar Safi 5 (25m 12b 1x4 0x6) SR: 41.66",
+                "minutes":25,
+                "retiredText":""
+            }
+
+            ,
+    "bbbTimestamp":0
+}
+
+
+
+

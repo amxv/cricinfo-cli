@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/amxv/cricinfo-cli/internal/cricinfo"
@@ -15,11 +16,18 @@ type playerCommandService interface {
 	News(ctx context.Context, query string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
 	Stats(ctx context.Context, query string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
 	Career(ctx context.Context, query string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
+	MatchStats(ctx context.Context, playerQuery, matchQuery string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
+	Innings(ctx context.Context, playerQuery, matchQuery string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
+	Dismissals(ctx context.Context, playerQuery, matchQuery string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
+	Deliveries(ctx context.Context, playerQuery, matchQuery string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
+	Bowling(ctx context.Context, playerQuery, matchQuery string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
+	Batting(ctx context.Context, playerQuery, matchQuery string, opts cricinfo.PlayerLookupOptions) (cricinfo.NormalizedResult, error)
 }
 
 type playerRuntimeOptions struct {
 	leagueID string
 	limit    int
+	match    string
 }
 
 var newPlayerService = func() (playerCommandService, error) {
@@ -41,6 +49,12 @@ func newPlayersCommand(global *globalOptions) *cobra.Command {
 			"  cricinfo players news <player>",
 			"  cricinfo players stats <player>",
 			"  cricinfo players career <player>",
+			"  cricinfo players match-stats <player> --match <match>",
+			"  cricinfo players innings <player> --match <match>",
+			"  cricinfo players dismissals <player> --match <match>",
+			"  cricinfo players deliveries <player> --match <match>",
+			"  cricinfo players bowling <player> --match <match>",
+			"  cricinfo players batting <player> --match <match>",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -111,7 +125,115 @@ func newPlayersCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(searchCmd, profileCmd, newsCmd, statsCmd, careerCmd)
+	matchStatsCmd := &cobra.Command{
+		Use:   "match-stats <player>",
+		Short: "Show player-in-match batting/bowling/fielding statistics",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.match) == "" {
+				return fmt.Errorf("--match is required")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerCommand(cmd, global, func(ctx context.Context, service playerCommandService) (cricinfo.NormalizedResult, error) {
+				return service.MatchStats(ctx, playerQuery, opts.match, cricinfo.PlayerLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+	matchStatsCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
+
+	inningsCmd := &cobra.Command{
+		Use:   "innings <player>",
+		Short: "Show player innings splits from roster-player linescores",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.match) == "" {
+				return fmt.Errorf("--match is required")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerCommand(cmd, global, func(ctx context.Context, service playerCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Innings(ctx, playerQuery, opts.match, cricinfo.PlayerLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+	inningsCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
+
+	dismissalsCmd := &cobra.Command{
+		Use:   "dismissals <player>",
+		Short: "Show dismissal and wicket views for a player in one match",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.match) == "" {
+				return fmt.Errorf("--match is required")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerCommand(cmd, global, func(ctx context.Context, service playerCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Dismissals(ctx, playerQuery, opts.match, cricinfo.PlayerLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+	dismissalsCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
+
+	deliveriesCmd := &cobra.Command{
+		Use:   "deliveries <player>",
+		Short: "Show player delivery events (including coordinate-aware shots/balls) for one match",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.match) == "" {
+				return fmt.Errorf("--match is required")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerCommand(cmd, global, func(ctx context.Context, service playerCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Deliveries(ctx, playerQuery, opts.match, cricinfo.PlayerLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+	deliveriesCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
+
+	bowlingCmd := &cobra.Command{
+		Use:   "bowling <player>",
+		Short: "Show player-in-match bowling split categories",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.match) == "" {
+				return fmt.Errorf("--match is required")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerCommand(cmd, global, func(ctx context.Context, service playerCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Bowling(ctx, playerQuery, opts.match, cricinfo.PlayerLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+	bowlingCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
+
+	battingCmd := &cobra.Command{
+		Use:   "batting <player>",
+		Short: "Show player-in-match batting split categories",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.match) == "" {
+				return fmt.Errorf("--match is required")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerCommand(cmd, global, func(ctx context.Context, service playerCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Batting(ctx, playerQuery, opts.match, cricinfo.PlayerLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+	battingCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
+
+	cmd.AddCommand(
+		searchCmd,
+		profileCmd,
+		newsCmd,
+		statsCmd,
+		careerCmd,
+		matchStatsCmd,
+		inningsCmd,
+		dismissalsCmd,
+		deliveriesCmd,
+		bowlingCmd,
+		battingCmd,
+	)
 	return cmd
 }
 

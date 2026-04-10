@@ -618,6 +618,7 @@ func normalizeTimelineWickets(overRow map[string]any) []InningsWicket {
 			FOWType:         stringField(entry, "fowType"),
 			Runs:            intField(entry, "runs"),
 			BallsFaced:      intField(entry, "ballsFaced"),
+			StrikeRate:      floatField(entry, "strikeRate"),
 			DismissalCard:   stringField(entry, "dismissalCard"),
 			ShortText:       stringField(entry, "shortText"),
 			DetailRef:       stringField(details, "$ref"),
@@ -644,35 +645,52 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 	over := mapField(payload, "over")
 	playType := mapField(payload, "playType")
 	dismissal := mapField(payload, "dismissal")
+	batsmanRef := nestedRef(payload, "batsman", "athlete")
+	bowlerRef := nestedRef(payload, "bowler", "athlete")
+	fielderRef := nestedRef(payload, "dismissal", "fielder", "athlete")
+	teamRef := refFromField(payload, "team")
+	teamIDs := refIDs(teamRef)
+	athletePlayerIDs := extractAthletePlayerIDs(payload)
 	xCoordinate := nullableFloatField(payload, "xCoordinate")
 	yCoordinate := nullableFloatField(payload, "yCoordinate")
 	bbbTimestamp := int64Field(payload, "bbbTimestamp")
 
 	event := &DeliveryEvent{
-		Ref:           ref,
-		ID:            nonEmpty(stringField(payload, "id"), ids["detailId"]),
-		Period:        intField(payload, "period"),
-		PeriodText:    stringField(payload, "periodText"),
-		OverNumber:    intField(over, "number"),
-		BallNumber:    intField(over, "ball"),
-		ScoreValue:    intField(payload, "scoreValue"),
-		ShortText:     stringField(payload, "shortText"),
-		Text:          stringField(payload, "text"),
-		HomeScore:     stringField(payload, "homeScore"),
-		AwayScore:     stringField(payload, "awayScore"),
-		BatsmanRef:    nestedRef(payload, "batsman", "athlete"),
-		BowlerRef:     nestedRef(payload, "bowler", "athlete"),
-		PlayType:      playType,
-		Dismissal:     dismissal,
-		DismissalType: stringField(dismissal, "type"),
-		DismissalText: stringField(dismissal, "text"),
-		SpeedKPH:      floatField(payload, "speedKPH"),
-		XCoordinate:   xCoordinate,
-		YCoordinate:   yCoordinate,
-		BBBTimestamp:  bbbTimestamp,
-		CoordinateX:   xCoordinate,
-		CoordinateY:   yCoordinate,
-		Timestamp:     bbbTimestamp,
+		Ref:              ref,
+		ID:               nonEmpty(stringField(payload, "id"), ids["detailId"]),
+		LeagueID:         ids["leagueId"],
+		EventID:          ids["eventId"],
+		CompetitionID:    ids["competitionId"],
+		MatchID:          ids["competitionId"],
+		TeamID:           nonEmpty(teamIDs["teamId"], teamIDs["competitorId"]),
+		Period:           intField(payload, "period"),
+		PeriodText:       stringField(payload, "periodText"),
+		OverNumber:       intField(over, "number"),
+		BallNumber:       intField(over, "ball"),
+		ScoreValue:       intField(payload, "scoreValue"),
+		ShortText:        stringField(payload, "shortText"),
+		Text:             stringField(payload, "text"),
+		HomeScore:        stringField(payload, "homeScore"),
+		AwayScore:        stringField(payload, "awayScore"),
+		BatsmanRef:       batsmanRef,
+		BowlerRef:        bowlerRef,
+		BatsmanPlayerID:  refIDs(batsmanRef)["athleteId"],
+		BowlerPlayerID:   refIDs(bowlerRef)["athleteId"],
+		FielderPlayerID:  refIDs(fielderRef)["athleteId"],
+		AthletePlayerIDs: athletePlayerIDs,
+		PlayType:         playType,
+		Dismissal:        dismissal,
+		DismissalType:    stringField(dismissal, "type"),
+		DismissalName:    nonEmpty(stringField(dismissal, "name"), stringField(dismissal, "type")),
+		DismissalCard:    stringField(dismissal, "dismissalCard"),
+		DismissalText:    stringField(dismissal, "text"),
+		SpeedKPH:         floatField(payload, "speedKPH"),
+		XCoordinate:      xCoordinate,
+		YCoordinate:      yCoordinate,
+		BBBTimestamp:     bbbTimestamp,
+		CoordinateX:      xCoordinate,
+		CoordinateY:      yCoordinate,
+		Timestamp:        bbbTimestamp,
 		Extensions: extensionsFromMap(payload,
 			"$ref", "id", "period", "periodText", "over", "scoreValue", "shortText", "text", "homeScore", "awayScore",
 			"batsman", "bowler", "playType", "dismissal", "speedKPH", "xCoordinate", "yCoordinate", "bbbTimestamp",
@@ -680,6 +698,32 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 	}
 
 	return event, nil
+}
+
+func extractAthletePlayerIDs(payload map[string]any) []string {
+	entries := mapSliceField(payload, "athletesInvolved")
+	if len(entries) == 0 {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(entries))
+	for _, item := range entries {
+		ref := stringField(item, "$ref")
+		playerID := strings.TrimSpace(refIDs(ref)["athleteId"])
+		if playerID == "" {
+			continue
+		}
+		if _, ok := seen[playerID]; ok {
+			continue
+		}
+		seen[playerID] = struct{}{}
+		out = append(out, playerID)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // NormalizeMatchScorecard maps a matchcards payload into batting, bowling, and partnerships views.
