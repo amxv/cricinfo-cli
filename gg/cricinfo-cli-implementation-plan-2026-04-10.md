@@ -727,11 +727,11 @@ Risks / fallbacks:
 - Risk: some auxiliary routes are frequently empty, making them easy to neglect.
 - Fallback: treat “empty but supported” as a first-class success state in both tests and renderers.
 
-### Phase 14: Historical Scope Traversal And Cached Dataset Hydration
+### Phase 14: Historical Scope Traversal And Real-Time Hydration
 
 Files to read before starting:
 
-- Phase 5 resolver and cache packages
+- Phase 5 resolver packages
 - Phase 12 league and season navigation commands
 - Phase 13 coverage ledger
 - `gg/agent-outputs/cricinfo-working-templates.tsv`
@@ -745,21 +745,22 @@ What to do:
   - season type
   - group
   - date range
-- Cache hydrated match, innings, player-match, and delivery summaries in a reusable local store.
+- Hydrate match, innings, player-match, and delivery summaries on demand in real time.
+- Reuse normalized data only within a single command execution when it avoids duplicate fetches, but do not add a persistent cache, local store, or warm-cache workflow.
 - Keep hydration domain-driven, not endpoint-driven.
-- Make sure later analytics commands can reuse the hydrated data without re-fetching every match each time.
-- If needed for operator control, add a narrowly scoped public hydration or warm-cache command. If added, it must stay domain-driven, such as `analysis warm --league IPL --seasons 2024,2025,2026`.
+- Make sure later analytics commands can reuse the in-process hydrated data for the active run without re-fetching the same scoped resources repeatedly.
+- Do not add a public warm-cache or persistence command in this phase.
 
 Validation strategy:
 
 - Integration tests for traversing a season or group into concrete match sets.
-- Live tests for reusing hydrated data on repeated analysis runs.
+- Live tests for reusing in-process hydrated data within a repeated scoped analysis flow in the same run.
 - Performance checks on a limited multi-match sample to ensure the approach is practical.
 
 Risks / fallbacks:
 
 - Risk: historical hydration can grow too slow or too broad if it tries to scan the whole universe.
-- Fallback: keep hydration scoped by explicit league and season boundaries and cache incrementally.
+- Fallback: keep hydration scoped by explicit league and season boundaries and use only narrowly scoped in-process memoization during a single command execution.
 
 ### Phase 15: Analysis Commands For Agent Reasoning
 
@@ -779,9 +780,10 @@ What to do:
   - `analysis bowling --metric economy --scope <match-or-season>`
   - `analysis bowling --metric dots --scope <match-or-season>`
   - `analysis bowling --metric sixes-conceded --scope <match-or-season>`
-  - `analysis batting --metric fours|sixes|strike-rate --scope <match-or-season>`
-  - `analysis partnerships --scope <match-or-season>`
+- `analysis batting --metric fours|sixes|strike-rate --scope <match-or-season>`
+- `analysis partnerships --scope <match-or-season>`
 - Make the analysis layer reusable so agents can combine CLI output with their own reasoning instead of relying on one-off ad hoc scripts.
+- Keep analysis results real-time by deriving them from scoped live traversal and in-process hydration, not from persistent cached datasets.
 - Ensure JSON output is stable enough for agents to sort, filter, and compare results safely.
 - Add ranking, grouping, and filter semantics that fit cricket usage:
   - by player
@@ -800,7 +802,7 @@ Validation strategy:
 Risks / fallbacks:
 
 - Risk: deriving historical answers directly from live traversal can be too slow for repeated agent use.
-- Fallback: always route analysis through the hydration cache from Phase 14 and surface freshness metadata in the output.
+- Fallback: keep traversal tightly scoped, reuse normalized data only within the current command execution, and surface scope metadata in the output when useful.
 
 ### Phase 16: Packaging, Release, Docs, And Final Acceptance
 
