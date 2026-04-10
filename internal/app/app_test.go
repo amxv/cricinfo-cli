@@ -41,7 +41,7 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
-func TestRunPlaceholderGroupHelp(t *testing.T) {
+func TestRunMatchesGroupHelp(t *testing.T) {
 	var out bytes.Buffer
 	var errBuf bytes.Buffer
 
@@ -54,8 +54,8 @@ func TestRunPlaceholderGroupHelp(t *testing.T) {
 	if !strings.Contains(help, "Next steps:") {
 		t.Fatalf("expected next-step guidance in help output, got: %q", help)
 	}
-	if !strings.Contains(help, "cricinfo matches --help") {
-		t.Fatalf("expected drill-down command in help output, got: %q", help)
+	if !strings.Contains(help, "cricinfo matches live") || !strings.Contains(help, "cricinfo matches show <match>") {
+		t.Fatalf("expected matches drill-down commands in help output, got: %q", help)
 	}
 }
 

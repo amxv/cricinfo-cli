@@ -148,6 +148,38 @@ func TestNormalizeExtensionsPreserveLongTailFields(t *testing.T) {
 	}
 }
 
+func TestNormalizeEventAndCompetitionMatchDecoding(t *testing.T) {
+	t.Parallel()
+
+	eventBody := mustReadFixtureFile(t, "matches-competitions/event-1529474.json")
+	eventMatches, err := NormalizeMatchesFromEvent(eventBody)
+	if err != nil {
+		t.Fatalf("NormalizeMatchesFromEvent error: %v", err)
+	}
+	if len(eventMatches) == 0 {
+		t.Fatalf("expected at least one normalized match from event fixture")
+	}
+
+	eventMatch := eventMatches[0]
+	assertJSONHasKeys(t, eventMatch, "id", "leagueId", "eventId", "competitionId", "teams", "date", "venueSummary", "statusRef")
+	if len(eventMatch.Teams) != 2 {
+		t.Fatalf("expected 2 teams in event-normalized match, got %d", len(eventMatch.Teams))
+	}
+	if strings.TrimSpace(eventMatch.VenueSummary) == "" {
+		t.Fatalf("expected venue summary to be populated from event fixture")
+	}
+
+	competitionBody := mustReadFixtureFile(t, "matches-competitions/competition.json")
+	competitionMatch, err := NormalizeMatch(competitionBody)
+	if err != nil {
+		t.Fatalf("NormalizeMatch competition error: %v", err)
+	}
+	assertJSONHasKeys(t, competitionMatch, "id", "leagueId", "eventId", "competitionId", "teams", "date", "venueSummary", "statusRef")
+	if competitionMatch.CompetitionID != "1529474" {
+		t.Fatalf("expected competition id 1529474, got %q", competitionMatch.CompetitionID)
+	}
+}
+
 func TestRenderTextGoldenSnapshots(t *testing.T) {
 	t.Parallel()
 

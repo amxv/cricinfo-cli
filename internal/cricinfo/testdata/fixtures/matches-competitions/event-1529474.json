@@ -1,0 +1,86 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474",
+  "id": "1529474",
+  "uid": "s:200~e:1529474",
+  "description": "3rd Match",
+  "shortDescription": "3rd Match, at Kandahar",
+  "date": "2026-04-09T05:30Z",
+  "endDate": "2026-04-12T23:59Z",
+  "leagues": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138",
+      "id": "19138",
+      "name": "Ahmad Shah Abdali 3-day Tournament"
+    }
+  ],
+  "venues": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/venues/1145410",
+      "id": "1145410",
+      "fullName": "Kandahar Cricket Stadium",
+      "address": {
+        "city": "Kandahar",
+        "country": "Afghanistan",
+        "summary": "Aino Maina, Kandahar, Afghanistan"
+      }
+    }
+  ],
+  "competitions": [
+    {
+      "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474",
+      "id": "1529474",
+      "uid": "s:200~e:1529474~c:1529474",
+      "description": "3rd Match",
+      "shortDescription": "3rd Match, at Kandahar",
+      "date": "2026-04-09T05:30Z",
+      "endDate": "2026-04-12T23:59Z",
+      "note": "Boost Region lead by 20 runs with 8 wickets remaining",
+      "status": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/status"
+      },
+      "details": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details"
+      },
+      "venue": {
+        "$ref": "http://core.espnuk.org/v2/sports/cricket/venues/1145410",
+        "id": "1145410",
+        "fullName": "Kandahar Cricket Stadium",
+        "address": {
+          "summary": "Aino Maina, Kandahar, Afghanistan"
+        }
+      },
+      "competitors": [
+        {
+          "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643",
+          "id": "789643",
+          "uid": "s:200~e:1529474~c:1529474~t:789643",
+          "type": "team",
+          "order": 1,
+          "homeAway": "home",
+          "winner": false,
+          "score": {
+            "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789643/scores"
+          },
+          "team": {
+            "$ref": "http://core.espnuk.org/v2/sports/cricket/events/1529474/teams/789643"
+          }
+        },
+        {
+          "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647",
+          "id": "789647",
+          "uid": "s:200~e:1529474~c:1529474~t:789647",
+          "type": "team",
+          "order": 2,
+          "homeAway": "away",
+          "winner": false,
+          "score": {
+            "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/competitors/789647/scores"
+          },
+          "team": {
+            "$ref": "http://core.espnuk.org/v2/sports/cricket/events/1529474/teams/789647"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -267,10 +267,25 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		if desc == "" {
 			desc = valueString(entity, "date")
 		}
+		teams := matchTeamsLabel(entity)
+		state := valueString(entity, "matchState")
+		score := valueString(entity, "scoreSummary")
+		venue := firstNonEmpty(valueString(entity, "venueName"), valueString(entity, "venueSummary"))
+		date := valueString(entity, "date")
 		if verbose {
-			return joinParts(id, desc, valueString(entity, "competitionId"))
+			return joinParts(
+				id,
+				desc,
+				teams,
+				state,
+				score,
+				date,
+				venue,
+				"league "+valueString(entity, "leagueId"),
+				"event "+valueString(entity, "eventId"),
+			)
 		}
-		return joinParts(id, desc)
+		return joinParts(id, desc, teams, state, score, date)
 	case EntityPlayer:
 		return joinParts(valueString(entity, "displayName"), bracket(valueString(entity, "id")))
 	case EntityTeam:
@@ -312,7 +327,12 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	order := []string{}
 	switch kind {
 	case EntityMatch:
-		order = []string{"id", "description", "shortDescription", "date", "venueName", "statusRef", "detailsRef"}
+		order = []string{
+			"id", "competitionId", "eventId", "leagueId",
+			"description", "shortDescription", "matchState",
+			"date", "endDate", "venueName", "venueSummary", "scoreSummary",
+			"statusRef", "detailsRef", "teams",
+		}
 	case EntityPlayer:
 		order = []string{"id", "displayName", "fullName", "battingName", "fieldingName", "teamRef", "newsRef"}
 	case EntityTeam:
@@ -489,4 +509,29 @@ func sentenceCase(value string) string {
 		return strings.ToUpper(value) + "."
 	}
 	return strings.ToUpper(value[:1]) + value[1:] + "."
+}
+
+func matchTeamsLabel(entity map[string]any) string {
+	teams := sliceValue(entity, "teams")
+	if len(teams) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(teams))
+	for _, raw := range teams {
+		team, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := firstNonEmpty(valueString(team, "shortName"), valueString(team, "name"), valueString(team, "id"))
+		if name == "" {
+			continue
+		}
+		parts = append(parts, name)
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " vs ")
 }

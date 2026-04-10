@@ -61,14 +61,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&opts.verbose, "verbose", false, "Show verbose output when available")
 	root.PersistentFlags().BoolVar(&opts.allFields, "all-fields", false, "Include long-tail fields in output")
 
-	root.AddCommand(newPlaceholderGroupCommand(
-		"matches",
-		"Live and historical match discovery, scorecards, and ball-by-ball views.",
-		[]string{
-			"cricinfo matches --help",
-			"cricinfo search --help",
-		},
-	))
+	root.AddCommand(newMatchesCommand(opts))
 	root.AddCommand(newPlaceholderGroupCommand(
 		"players",
 		"Player discovery, profiles, and match-context statistics.",

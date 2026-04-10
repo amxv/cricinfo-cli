@@ -14,42 +14,29 @@ func NormalizeMatch(data []byte) (*Match, error) {
 		return nil, err
 	}
 
-	ref := stringField(payload, "$ref")
-	ids := refIDs(ref)
+	match := normalizeMatchFromCompetitionMap(payload, eventMatchContext{})
+	return &match, nil
+}
 
-	var venueName string
-	if venue := mapField(payload, "venue"); venue != nil {
-		venueName = stringField(venue, "fullName")
+// NormalizeMatchesFromEvent maps an event payload into one or more normalized match entries.
+func NormalizeMatchesFromEvent(data []byte) ([]Match, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
 	}
 
-	teams := make([]Team, 0)
-	for _, item := range mapSliceField(payload, "competitors") {
-		teams = append(teams, normalizeTeamMap(item))
+	context := buildEventMatchContext(payload)
+	competitions := mapSliceField(payload, "competitions")
+	if len(competitions) == 0 {
+		return []Match{}, nil
 	}
 
-	match := &Match{
-		Ref:              ref,
-		ID:               nonEmpty(stringField(payload, "id"), ids["competitionId"]),
-		UID:              stringField(payload, "uid"),
-		LeagueID:         ids["leagueId"],
-		EventID:          ids["eventId"],
-		CompetitionID:    ids["competitionId"],
-		Description:      stringField(payload, "description"),
-		ShortDescription: stringField(payload, "shortDescription"),
-		Note:             stringField(payload, "note"),
-		Date:             stringField(payload, "date"),
-		EndDate:          stringField(payload, "endDate"),
-		VenueName:        venueName,
-		StatusRef:        refFromField(payload, "status"),
-		DetailsRef:       refFromField(payload, "details"),
-		Teams:            teams,
-		Extensions: extensionsFromMap(payload,
-			"$ref", "id", "uid", "description", "shortDescription", "note", "date", "endDate",
-			"status", "details", "competitors",
-		),
+	matches := make([]Match, 0, len(competitions))
+	for _, competition := range competitions {
+		matches = append(matches, normalizeMatchFromCompetitionMap(competition, context))
 	}
 
-	return match, nil
+	return matches, nil
 }
 
 // NormalizePlayer maps an athlete profile payload into the normalized player shape.
@@ -364,6 +351,7 @@ func normalizeStandingsEntries(item map[string]any) []Team {
 
 func normalizeTeamMap(payload map[string]any) Team {
 	ref := stringField(payload, "$ref")
+	teamRef := refFromField(payload, "team")
 	ids := refIDs(ref)
 
 	name := stringField(payload, "displayName")
@@ -376,14 +364,17 @@ func normalizeTeamMap(payload map[string]any) Team {
 	}
 
 	id := nonEmpty(stringField(payload, "id"), ids["teamId"], ids["competitorId"])
+	score := mapField(payload, "score")
+	scoreSummary := nonEmpty(stringField(score, "displayValue"), stringField(score, "value"))
 
 	return Team{
-		Ref:           ref,
+		Ref:           nonEmpty(teamRef, ref),
 		ID:            id,
 		UID:           stringField(payload, "uid"),
 		Name:          name,
 		ShortName:     shortName,
 		Abbreviation:  stringField(payload, "abbreviation"),
+		ScoreSummary:  scoreSummary,
 		Type:          stringField(payload, "type"),
 		HomeAway:      stringField(payload, "homeAway"),
 		Order:         intField(payload, "order"),
@@ -399,6 +390,155 @@ func normalizeTeamMap(payload map[string]any) Team {
 			"type", "homeAway", "order", "winner", "score", "roster", "leaders", "statistics", "record", "records", "linescores",
 		),
 	}
+}
+
+type eventMatchContext struct {
+	ref              string
+	leagueID         string
+	eventID          string
+	date             string
+	endDate          string
+	description      string
+	shortDescription string
+	venueName        string
+	venueSummary     string
+}
+
+func buildEventMatchContext(payload map[string]any) eventMatchContext {
+	ref := stringField(payload, "$ref")
+	ids := refIDs(ref)
+	leagueID := ids["leagueId"]
+
+	if leagueID == "" {
+		for _, league := range mapSliceField(payload, "leagues") {
+			leagueID = nonEmpty(
+				stringField(league, "id"),
+				refIDs(stringField(league, "$ref"))["leagueId"],
+			)
+			if leagueID != "" {
+				break
+			}
+		}
+	}
+
+	venueName, venueSummary := eventVenueSummary(payload)
+	return eventMatchContext{
+		ref:              ref,
+		leagueID:         leagueID,
+		eventID:          nonEmpty(stringField(payload, "id"), ids["eventId"]),
+		date:             stringField(payload, "date"),
+		endDate:          stringField(payload, "endDate"),
+		description:      nonEmpty(stringField(payload, "description"), stringField(payload, "name")),
+		shortDescription: nonEmpty(stringField(payload, "shortDescription"), stringField(payload, "shortName")),
+		venueName:        venueName,
+		venueSummary:     venueSummary,
+	}
+}
+
+func normalizeMatchFromCompetitionMap(payload map[string]any, context eventMatchContext) Match {
+	ref := stringField(payload, "$ref")
+	ids := refIDs(ref)
+
+	venue := mapField(payload, "venue")
+	venueName := nonEmpty(stringField(venue, "fullName"), context.venueName)
+	venueSummary := nonEmpty(venueAddressSummary(venue), context.venueSummary)
+
+	teams := make([]Team, 0)
+	for _, item := range mapSliceField(payload, "competitors") {
+		teams = append(teams, normalizeTeamMap(item))
+	}
+
+	scoreSummary := matchScoreSummary(teams)
+	matchState := nonEmpty(
+		stringField(payload, "state"),
+		stringField(payload, "summary"),
+		stringField(payload, "statusSummary"),
+		stringField(mapField(payload, "status"), "summary"),
+		stringField(mapField(mapField(payload, "status"), "type"), "detail"),
+		stringField(mapField(mapField(payload, "status"), "type"), "description"),
+	)
+
+	return Match{
+		Ref:              nonEmpty(ref, context.ref),
+		ID:               nonEmpty(stringField(payload, "id"), ids["competitionId"]),
+		UID:              stringField(payload, "uid"),
+		LeagueID:         nonEmpty(ids["leagueId"], context.leagueID),
+		EventID:          nonEmpty(ids["eventId"], context.eventID),
+		CompetitionID:    nonEmpty(ids["competitionId"], stringField(payload, "id")),
+		Description:      nonEmpty(stringField(payload, "description"), context.description),
+		ShortDescription: nonEmpty(stringField(payload, "shortDescription"), context.shortDescription),
+		Note:             stringField(payload, "note"),
+		MatchState:       matchState,
+		Date:             nonEmpty(stringField(payload, "date"), context.date),
+		EndDate:          nonEmpty(stringField(payload, "endDate"), context.endDate),
+		VenueName:        venueName,
+		VenueSummary:     venueSummary,
+		ScoreSummary:     scoreSummary,
+		StatusRef:        refFromField(payload, "status"),
+		DetailsRef:       refFromField(payload, "details"),
+		Teams:            teams,
+		Extensions: extensionsFromMap(payload,
+			"$ref", "id", "uid", "description", "shortDescription", "note", "state", "summary", "statusSummary",
+			"date", "endDate", "status", "details", "competitors",
+		),
+	}
+}
+
+func eventVenueSummary(payload map[string]any) (string, string) {
+	venues := mapSliceField(payload, "venues")
+	if len(venues) == 0 {
+		return "", ""
+	}
+	return nonEmpty(
+		stringField(venues[0], "fullName"),
+		stringField(venues[0], "shortName"),
+	), venueAddressSummary(venues[0])
+}
+
+func venueAddressSummary(venue map[string]any) string {
+	if venue == nil {
+		return ""
+	}
+	address := mapField(venue, "address")
+	if address == nil {
+		return ""
+	}
+	return nonEmpty(
+		stringField(address, "summary"),
+		strings.Join(compactValues(
+			stringField(address, "city"),
+			stringField(address, "state"),
+			stringField(address, "country"),
+		), ", "),
+	)
+}
+
+func matchScoreSummary(teams []Team) string {
+	parts := make([]string, 0, len(teams))
+	for _, team := range teams {
+		if team.ScoreSummary == "" {
+			continue
+		}
+		label := nonEmpty(team.ShortName, team.Name, team.ID)
+		if label == "" {
+			parts = append(parts, team.ScoreSummary)
+			continue
+		}
+		parts = append(parts, label+" "+team.ScoreSummary)
+	}
+	return strings.Join(parts, " | ")
+}
+
+func compactValues(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func decodePayloadMap(data []byte) (map[string]any, error) {

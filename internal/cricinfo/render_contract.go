@@ -67,9 +67,12 @@ type Match struct {
 	Description      string         `json:"description,omitempty"`
 	ShortDescription string         `json:"shortDescription,omitempty"`
 	Note             string         `json:"note,omitempty"`
+	MatchState       string         `json:"matchState,omitempty"`
 	Date             string         `json:"date,omitempty"`
 	EndDate          string         `json:"endDate,omitempty"`
 	VenueName        string         `json:"venueName,omitempty"`
+	VenueSummary     string         `json:"venueSummary,omitempty"`
+	ScoreSummary     string         `json:"scoreSummary,omitempty"`
 	StatusRef        string         `json:"statusRef,omitempty"`
 	DetailsRef       string         `json:"detailsRef,omitempty"`
 	Teams            []Team         `json:"teams,omitempty"`
@@ -103,6 +106,7 @@ type Team struct {
 	Name          string         `json:"name,omitempty"`
 	ShortName     string         `json:"shortName,omitempty"`
 	Abbreviation  string         `json:"abbreviation,omitempty"`
+	ScoreSummary  string         `json:"scoreSummary,omitempty"`
 	Type          string         `json:"type,omitempty"`
 	HomeAway      string         `json:"homeAway,omitempty"`
 	Order         int            `json:"order,omitempty"`
