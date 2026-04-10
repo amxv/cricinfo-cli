@@ -1,0 +1,13 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1479935/seasons/2025/types/1/groups/1",
+  "uid": "s:200~l:1479935~g:1",
+  "id": "1",
+  "name": "",
+  "abbreviation": "",
+  "season": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1479935/seasons/2025"
+  },
+  "standings": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/1479935/seasons/2025/types/1/groups/1/standings"
+  }
+}

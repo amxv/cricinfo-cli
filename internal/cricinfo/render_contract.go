@@ -31,6 +31,9 @@ const (
 	EntityTeamRecords     EntityKind = "team_records"
 	EntityLeague          EntityKind = "league"
 	EntitySeason          EntityKind = "season"
+	EntityCalendarDay     EntityKind = "calendar_day"
+	EntitySeasonType      EntityKind = "season_type"
+	EntitySeasonGroup     EntityKind = "season_group"
 	EntityStandingsGroup  EntityKind = "standings_group"
 	EntityInnings         EntityKind = "innings"
 	EntityDeliveryEvent   EntityKind = "delivery_event"
@@ -475,6 +478,47 @@ type Season struct {
 	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
+// CalendarDay is the normalized league calendar day shape.
+type CalendarDay struct {
+	Ref        string         `json:"ref,omitempty"`
+	LeagueID   string         `json:"leagueId,omitempty"`
+	Date       string         `json:"date,omitempty"`
+	DayType    string         `json:"dayType,omitempty"`
+	StartDate  string         `json:"startDate,omitempty"`
+	EndDate    string         `json:"endDate,omitempty"`
+	Sections   []string       `json:"sections,omitempty"`
+	Extensions map[string]any `json:"extensions,omitempty"`
+}
+
+// SeasonType is the normalized season type shape.
+type SeasonType struct {
+	Ref          string         `json:"ref,omitempty"`
+	ID           string         `json:"id,omitempty"`
+	LeagueID     string         `json:"leagueId,omitempty"`
+	SeasonID     string         `json:"seasonId,omitempty"`
+	Name         string         `json:"name,omitempty"`
+	Abbreviation string         `json:"abbreviation,omitempty"`
+	StartDate    string         `json:"startDate,omitempty"`
+	EndDate      string         `json:"endDate,omitempty"`
+	HasGroups    bool           `json:"hasGroups"`
+	HasStandings bool           `json:"hasStandings"`
+	GroupsRef    string         `json:"groupsRef,omitempty"`
+	Extensions   map[string]any `json:"extensions,omitempty"`
+}
+
+// SeasonGroup is the normalized season group shape.
+type SeasonGroup struct {
+	Ref          string         `json:"ref,omitempty"`
+	ID           string         `json:"id,omitempty"`
+	LeagueID     string         `json:"leagueId,omitempty"`
+	SeasonID     string         `json:"seasonId,omitempty"`
+	TypeID       string         `json:"typeId,omitempty"`
+	Name         string         `json:"name,omitempty"`
+	Abbreviation string         `json:"abbreviation,omitempty"`
+	StandingsRef string         `json:"standingsRef,omitempty"`
+	Extensions   map[string]any `json:"extensions,omitempty"`
+}
+
 // StandingsGroup is the normalized standings-group shape.
 type StandingsGroup struct {
 	Ref        string         `json:"ref,omitempty"`
@@ -793,6 +837,12 @@ func kindPlural(kind EntityKind) string {
 		return "leagues"
 	case EntitySeason:
 		return "seasons"
+	case EntityCalendarDay:
+		return "calendar days"
+	case EntitySeasonType:
+		return "season types"
+	case EntitySeasonGroup:
+		return "season groups"
 	case EntityStandingsGroup:
 		return "standings groups"
 	case EntityInnings:
@@ -850,6 +900,8 @@ func refIDs(raw string) map[string]string {
 			ids["athleteId"] = value
 		case "seasons":
 			ids["seasonId"] = value
+		case "types":
+			ids["typeId"] = value
 		case "groups":
 			ids["groupId"] = value
 		case "standings":

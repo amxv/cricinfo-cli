@@ -385,6 +385,23 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		return joinParts(firstNonEmpty(valueString(entity, "name"), valueString(entity, "id")), bracket(valueString(entity, "slug")))
 	case EntitySeason:
 		return joinParts(valueString(entity, "id"), valueString(entity, "leagueId"))
+	case EntityCalendarDay:
+		return joinParts(
+			valueString(entity, "date"),
+			valueString(entity, "dayType"),
+			strings.Join(stringSliceValue(entity, "sections"), ", "),
+		)
+	case EntitySeasonType:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "name"), "type "+valueString(entity, "id")),
+			"season "+valueString(entity, "seasonId"),
+		)
+	case EntitySeasonGroup:
+		return joinParts(
+			firstNonEmpty(valueString(entity, "name"), "group "+valueString(entity, "id")),
+			"type "+valueString(entity, "typeId"),
+			"season "+valueString(entity, "seasonId"),
+		)
 	case EntityStandingsGroup:
 		return joinParts(valueString(entity, "id"), "season "+valueString(entity, "seasonId"))
 	case EntityInnings:
@@ -482,6 +499,12 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 		order = []string{"id", "name", "slug"}
 	case EntitySeason:
 		order = []string{"id", "year", "leagueId"}
+	case EntityCalendarDay:
+		order = []string{"date", "dayType", "sections", "startDate", "endDate", "leagueId"}
+	case EntitySeasonType:
+		order = []string{"id", "name", "abbreviation", "seasonId", "leagueId", "startDate", "endDate", "hasGroups", "hasStandings", "groupsRef"}
+	case EntitySeasonGroup:
+		order = []string{"id", "name", "abbreviation", "typeId", "seasonId", "leagueId", "standingsRef"}
 	case EntityStandingsGroup:
 		order = []string{"id", "seasonId", "groupId"}
 	case EntityInnings:
@@ -973,6 +996,26 @@ func sliceValue(m map[string]any, key string) []any {
 		return nil
 	}
 	return raw
+}
+
+func stringSliceValue(m map[string]any, key string) []string {
+	raw := sliceValue(m, key)
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		asString, ok := item.(string)
+		if !ok {
+			continue
+		}
+		asString = strings.TrimSpace(asString)
+		if asString == "" {
+			continue
+		}
+		out = append(out, asString)
+	}
+	return out
 }
 
 func printableValue(value any) string {

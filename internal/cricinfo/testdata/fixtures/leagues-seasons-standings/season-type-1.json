@@ -1,0 +1,13 @@
+{
+  "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/seasons/2025/types/1",
+  "id": "1",
+  "name": "Regular Season",
+  "abbreviation": "Merwais Nika Regional 3-Day Trophy",
+  "startDate": "2025-04-08T00:00:00Z",
+  "endDate": "2025-04-26T23:59:00Z",
+  "hasGroups": true,
+  "hasStandings": true,
+  "groups": {
+    "$ref": "http://core.espnuk.org/v2/sports/cricket/leagues/19138/seasons/2025/types/1/groups"
+  }
+}

@@ -64,30 +64,9 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	root.AddCommand(newMatchesCommand(opts))
 	root.AddCommand(newPlayersCommand(opts))
 	root.AddCommand(newTeamsCommand(opts))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"leagues",
-		"League-level discovery for events, seasons, and calendars.",
-		[]string{
-			"cricinfo leagues --help",
-			"cricinfo standings --help",
-		},
-	))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"seasons",
-		"Season navigation across league season, type, and group hierarchies.",
-		[]string{
-			"cricinfo seasons --help",
-			"cricinfo leagues --help",
-		},
-	))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"standings",
-		"Standings and table exploration across league competition structures.",
-		[]string{
-			"cricinfo standings --help",
-			"cricinfo leagues --help",
-		},
-	))
+	root.AddCommand(newLeaguesCommand(opts))
+	root.AddCommand(newSeasonsCommand(opts))
+	root.AddCommand(newStandingsCommand(opts))
 	root.AddCommand(newPlaceholderGroupCommand(
 		"competitions",
 		"Competition metadata including officials, broadcasts, and odds.",
