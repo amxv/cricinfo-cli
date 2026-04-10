@@ -1,5 +1,5 @@
 {
-  "name": "@amxv/cricinfo",
+  "name": "cricinfo-cli-go",
   "version": "0.1.0",
   "description": "Cricinfo command line interface",
   "license": "MIT",

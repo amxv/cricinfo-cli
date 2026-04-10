@@ -1,25 +1,25 @@
 # AGENTS.md
 
-Guidance for coding agents working in `cricinfo`.
+Guidance for coding agents working in `cricinfo-cli`.
 
 ## Purpose
 
-This repo is a Cricinfo Go command-line tool distributed through npm.
-
-The sample command is `cricinfo`. Replace it with your actual CLI name and behavior.
+This repository ships the `cricinfo` Go CLI through npm. Treat the npm package, the Go binary, and the release workflow as one contract.
 
 ## Architecture
 
-- `cmd/cricinfo/main.go`: process entrypoint, error handling, exits non-zero on failure.
-- `internal/app/app.go`: command parser + handlers.
-- `internal/app/app_test.go`: starter tests.
-- `bin/cricinfo.js`: npm shim that invokes packaged native binary.
-- `scripts/postinstall.js`: downloads release binary on install, falls back to `go build`.
-- `.github/workflows/release.yml`: tag-driven release pipeline.
+- `cmd/cricinfo/main.go`: process entrypoint and exit handling.
+- `internal/app/app.go`: command parsing and top-level dispatch.
+- `internal/cli/`: command families, help text, and flag wiring.
+- `internal/cricinfo/`: transport, normalization, rendering, and analysis logic.
+- `bin/cricinfo.js`: npm shim that launches the installed native binary.
+- `scripts/postinstall.js`: downloads the tagged binary or falls back to `go build`.
+- `Makefile`: local build, test, smoke, and release helpers.
+- `.github/workflows/release.yml`: tag-driven build and publish pipeline.
 
-## Local commands
+## Local Commands
 
-Use `make` targets:
+Prefer the checked-in `Makefile` targets:
 
 - `make fmt`
 - `make test`
@@ -28,42 +28,36 @@ Use `make` targets:
 - `make check`
 - `make build`
 - `make build-all`
+- `make npm-smoke`
+- `make acceptance`
+- `make test-live`
+- `make test-live-smoke`
+- `make fixtures-refresh`
 - `make install-local`
 
-Direct commands:
+Direct commands that are also safe to use:
 
 - `go test ./...`
 - `go vet ./...`
+- `npm run test`
 - `npm run lint`
 
-When running Node or npm commands through background-process helpers on this machine, prefer `zsh -lc '<command>'` so the login shell initializes the expected `PATH`. Plain non-login `sh` execution may not find `npm`.
+When running Node or npm commands through background helpers on this machine, prefer `zsh -lc '<command>'` so the login shell initializes the expected `PATH`.
 
-## How to customize safely
+## Release Contract
 
-1. Rename CLI command consistently in all places:
-- directory `cmd/cricinfo`
-- `package.json` values (`bin`, `config.cliBinaryName`)
-- `bin/cricinfo.js`
-- workflow env `CLI_BINARY`
-- `Makefile` `BIN_NAME`
+Releases trigger on `v*` tags and expect:
 
-2. Keep binary naming convention unchanged unless you also update postinstall/workflow:
-- release assets: `<cli>_<goos>_<goarch>[.exe]`
-- npm-installed binary path: `bin/<cli>-bin` (or `.exe` on Windows)
+- `NPM_TOKEN` to be configured in GitHub Actions.
+- `package.json` to keep the published npm package name and `config.cliBinaryName` aligned with the CLI install contract.
+- release assets to follow `<cli>_<goos>_<goarch>[.exe]`.
+- `scripts/postinstall.js` to be able to fetch the matching GitHub release asset or build from source.
 
-3. If adding dependencies, commit `go.sum` and optionally enable Go cache in workflow.
-
-4. Keep help output expressive and command-local (`<command> --help` should explain examples).
-
-## Release contract
-
-Release pipeline triggers on `v*` tags and expects:
-
-- `NPM_TOKEN` GitHub secret present.
-- npm package name in `package.json` is publishable under your account/org.
-- repository URL matches the release origin used by `scripts/postinstall.js`.
+If you touch release artifacts or the binary name, update `package.json`, `bin/cricinfo.js`, `scripts/postinstall.js`, `Makefile`, and `.github/workflows/release.yml` in the same change.
 
 ## Guardrails
 
-- Prefer additive changes; do not break the release asset naming contract unintentionally.
-- If you change release artifacts or CLI binary name, update both workflow and postinstall script in the same PR.
+- Prefer additive changes and keep the existing CLI naming contract intact.
+- Do not rewrite user changes in unrelated files.
+- Keep help output concrete and command-local so `<command> --help` explains the next step.
+- If you add dependencies, commit the updated `go.sum` and verify the release workflow still builds cleanly.

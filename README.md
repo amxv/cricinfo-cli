@@ -1,40 +1,59 @@
 # cricinfo
 
-Domain-driven Cricinfo CLI for real-time match, player, team, league, season, and analysis workflows.
-
-The CLI uses normalized public Cricinfo API data and supports both:
-- human-readable text output
-- stable machine-friendly JSON output (`--format json`)
+`cricinfo` is a Go-powered Cricinfo CLI published on npm as `cricinfo-cli-go`. It is designed for both human workflows and agent workflows, with readable text output by default and structured JSON or JSONL for automation.
 
 ## Install
 
+Install the latest published package globally:
+
 ```bash
-npm i -g @amxv/cricinfo
-cricinfo --help
+npm i -g cricinfo-cli-go
 cricinfo --version
+cricinfo --help
 ```
 
-## Command Families
+If you are working from source, the repo also ships local build targets:
+
+```bash
+make build
+make install-local
+```
+
+The npm package installs a platform-specific binary when available and falls back to a local Go build during `postinstall` if needed.
+
+## Usage
+
+Start at the root help, then drill into the family you need:
+
+```bash
+cricinfo --help
+cricinfo matches --help
+cricinfo players --help
+cricinfo teams --help
+cricinfo leagues --help
+cricinfo analysis --help
+```
+
+Common command families include:
 
 ```text
-cricinfo matches ...
-cricinfo players ...
-cricinfo teams ...
-cricinfo leagues ...
-cricinfo seasons ...
-cricinfo standings ...
-cricinfo competitions ...
-cricinfo search ...
-cricinfo analysis ...
+matches
+players
+teams
+leagues
+seasons
+standings
+competitions
+search
+analysis
 ```
 
-Use `cricinfo <family> --help` to drill deeper.
-
-## Quick Start
+Typical workflows:
 
 ```bash
-# Discover current matches
+# Discover current or recent match data
 cricinfo matches list
+cricinfo matches live
 cricinfo matches show 1529474
 cricinfo matches scorecard 1529474
 
@@ -49,55 +68,63 @@ cricinfo leagues seasons 19138
 cricinfo seasons show 19138 --season 2025
 
 # Derived analysis
-cricinfo analysis dismissals --league 19138 --seasons 2024-2025
+cricinfo analysis dismissals --league 19138 --seasons 2025
 cricinfo analysis bowling --metric economy --scope match:1529474
 cricinfo analysis batting --metric strike-rate --scope season:2025 --league 19138
 cricinfo analysis partnerships --scope season:2025 --league 19138
 ```
 
-## JSON Output (Agent Friendly)
+## Output Modes
+
+Use `--format text|json|jsonl` to match the consumer:
 
 ```bash
 cricinfo matches show 1529474 --format json
+cricinfo matches list --format jsonl
 cricinfo players profile 1361257 --format json
-cricinfo analysis dismissals --league 19138 --seasons 2025 --format json
 ```
 
-Global flags:
-- `--format text|json|jsonl`
-- `--verbose`
-- `--all-fields`
+Helpful global flags:
+
+- `--verbose` for richer summaries
+- `--all-fields` to retain extended entity data in structured output
+- `--format jsonl` for list-oriented machine processing
 
 ## Development
+
+Use the checked-in `Makefile` targets whenever possible:
 
 ```bash
 make fmt
 make test
+make vet
+make lint
 make check
 make build
 make build-all
+make npm-smoke
+make acceptance
 make test-live
 make test-live-smoke
 make fixtures-refresh
-make npm-smoke
-make acceptance
 ```
 
-`make acceptance` runs an end-to-end live traversal smoke pass across install/help, matches, players, teams, leagues/seasons, analysis, and JSON rendering.
+`make check` runs format, tests, vet, and lint. `make acceptance` performs a live end-to-end traversal across install/help, matches, players, teams, leagues, analysis, and JSON rendering.
 
 ## Release
 
-Tag-based GitHub Actions release:
-- push tag `vX.Y.Z`
-- workflow runs quality checks
-- workflow builds cross-platform binaries with embedded tag version
-- workflow publishes GitHub release assets
-- workflow publishes npm package
+Releases are tag-driven. Push a `vX.Y.Z` tag and GitHub Actions will:
 
-Core files:
-- `cmd/cricinfo/main.go`: process entrypoint
-- `internal/cli/`: command tree + help UX
-- `internal/cricinfo/`: transport, normalization, analysis, rendering
-- `scripts/postinstall.js`: npm install binary downloader with local Go fallback
-- `bin/cricinfo.js`: npm executable shim
-- `.github/workflows/release.yml`: release pipeline
+1. run Go and Node quality checks
+2. build release binaries for the supported platforms
+3. publish the GitHub release assets
+4. publish the npm package at the tag version
+
+Release artifact conventions:
+
+- binary name: `cricinfo`
+- GitHub release assets: `cricinfo_<goos>_<goarch>[.exe]`
+- npm shim: `bin/cricinfo.js`
+- install fallback: `scripts/postinstall.js`
+
+If you change the CLI name or release artifact layout, update `package.json`, `bin/cricinfo.js`, `scripts/postinstall.js`, `Makefile`, and `.github/workflows/release.yml` together.
