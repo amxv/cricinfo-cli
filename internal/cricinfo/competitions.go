@@ -172,6 +172,7 @@ func (s *CompetitionService) resolveCompetitionLookup(
 		passthrough.Kind = EntityCompetition
 		return nil, passthrough
 	}
+	helper.enrichMatchTeamsFromIndex(lookup.match)
 
 	competition, err := NormalizeCompetition(lookup.resolved.Body, *lookup.match)
 	if err != nil {

@@ -1194,31 +1194,17 @@ func (s *PlayerService) fetchPlayerDeliveries(
 		}
 	}
 
-	deliveries := make([]DeliveryEvent, 0, len(pageItems))
-	for _, item := range pageItems {
-		itemRef := strings.TrimSpace(item.URL)
-		if itemRef == "" {
-			warnings = append(warnings, "skip detail item with empty ref")
-			continue
-		}
+	helper := &MatchService{client: s.client, resolver: s.resolver}
+	loaded, loadWarnings := helper.loadDeliveryEvents(ctx, pageItems)
+	warnings = append(warnings, loadWarnings...)
 
-		itemResolved, itemErr := s.client.ResolveRefChain(ctx, itemRef)
-		if itemErr != nil {
-			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, itemErr))
-			continue
-		}
-
-		delivery, normalizeErr := NormalizeDeliveryEvent(itemResolved.Body)
-		if normalizeErr != nil {
-			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemResolved.CanonicalRef, normalizeErr))
-			continue
-		}
-
-		roles := playerInvolvement(*delivery, contextData.playerID)
+	deliveries := make([]DeliveryEvent, 0, len(loaded))
+	for _, delivery := range loaded {
+		roles := playerInvolvement(delivery, contextData.playerID)
 		if len(roles) == 0 {
 			continue
 		}
-		if dismissalsOnly && !isDismissalDelivery(*delivery) {
+		if dismissalsOnly && !isDismissalDelivery(delivery) {
 			continue
 		}
 
@@ -1228,7 +1214,7 @@ func (s *PlayerService) fetchPlayerDeliveries(
 		delivery.LeagueID = nonEmpty(delivery.LeagueID, contextData.match.LeagueID)
 		delivery.TeamID = nonEmpty(delivery.TeamID, contextData.team.ID)
 		delivery.Involvement = roles
-		deliveries = append(deliveries, *delivery)
+		deliveries = append(deliveries, delivery)
 	}
 
 	return resolved, deliveries, compactWarnings(warnings), nil

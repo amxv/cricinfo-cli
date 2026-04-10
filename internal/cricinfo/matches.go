@@ -7,9 +7,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const defaultMatchListLimit = 20
+const deliveryFetchConcurrency = 12
 
 // MatchServiceConfig configures match discovery and lookup behavior.
 type MatchServiceConfig struct {
@@ -588,26 +590,10 @@ func (s *MatchService) deliveryEventsFromRoute(ctx context.Context, ref string, 
 	warnings := make([]string, 0, len(baseWarnings))
 	warnings = append(warnings, baseWarnings...)
 	warnings = append(warnings, pageWarnings...)
-
-	for _, item := range pageItems {
-		itemRef := strings.TrimSpace(item.URL)
-		if itemRef == "" {
-			warnings = append(warnings, "skip detail item with empty ref")
-			continue
-		}
-
-		itemResolved, itemErr := s.resolveRefChainResilient(ctx, itemRef)
-		if itemErr != nil {
-			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, itemErr))
-			continue
-		}
-
-		delivery, normalizeErr := NormalizeDeliveryEvent(itemResolved.Body)
-		if normalizeErr != nil {
-			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, normalizeErr))
-			continue
-		}
-		events = append(events, *delivery)
+	loaded, loadWarnings := s.loadDeliveryEvents(ctx, pageItems)
+	warnings = append(warnings, loadWarnings...)
+	for _, delivery := range loaded {
+		events = append(events, delivery)
 	}
 
 	result := NewListResult(EntityDeliveryEvent, events)
@@ -617,6 +603,59 @@ func (s *MatchService) deliveryEventsFromRoute(ctx context.Context, ref string, 
 	result.RequestedRef = resolved.RequestedRef
 	result.CanonicalRef = resolved.CanonicalRef
 	return result, nil
+}
+
+func (s *MatchService) loadDeliveryEvents(ctx context.Context, refs []Ref) ([]DeliveryEvent, []string) {
+	type deliveryLoadResult struct {
+		index    int
+		delivery *DeliveryEvent
+		warning  string
+	}
+
+	results := make([]deliveryLoadResult, len(refs))
+	sem := make(chan struct{}, deliveryFetchConcurrency)
+	var wg sync.WaitGroup
+	for i, item := range refs {
+		wg.Add(1)
+		go func(index int, item Ref) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			itemRef := strings.TrimSpace(item.URL)
+			if itemRef == "" {
+				results[index] = deliveryLoadResult{index: index, warning: "skip detail item with empty ref"}
+				return
+			}
+
+			itemResolved, itemErr := s.resolveRefChainResilient(ctx, itemRef)
+			if itemErr != nil {
+				results[index] = deliveryLoadResult{index: index, warning: fmt.Sprintf("detail %s: %v", itemRef, itemErr)}
+				return
+			}
+
+			delivery, normalizeErr := NormalizeDeliveryEvent(itemResolved.Body)
+			if normalizeErr != nil {
+				results[index] = deliveryLoadResult{index: index, warning: fmt.Sprintf("detail %s: %v", itemRef, normalizeErr)}
+				return
+			}
+			results[index] = deliveryLoadResult{index: index, delivery: delivery}
+		}(i, item)
+	}
+	wg.Wait()
+
+	deliveries := make([]DeliveryEvent, 0, len(results))
+	warnings := make([]string, 0)
+	for _, result := range results {
+		if result.warning != "" {
+			warnings = append(warnings, result.warning)
+			continue
+		}
+		if result.delivery != nil {
+			deliveries = append(deliveries, *result.delivery)
+		}
+	}
+	return deliveries, compactWarnings(warnings)
 }
 
 type selectedInningsContext struct {

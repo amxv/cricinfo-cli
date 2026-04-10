@@ -400,30 +400,17 @@ func (s *HistoricalScopeSession) HydrateDeliverySummaries(ctx context.Context, m
 		}
 	}
 
-	items := make([]DeliveryEvent, 0, len(pageItems))
-	for _, item := range pageItems {
-		itemRef := strings.TrimSpace(item.URL)
-		if itemRef == "" {
-			warnings = append(warnings, "skip detail item with empty ref")
-			continue
-		}
+	helper := &MatchService{client: s.client, resolver: s.resolver}
+	loaded, loadWarnings := helper.loadDeliveryEvents(ctx, pageItems)
+	warnings = append(warnings, loadWarnings...)
 
-		itemDoc, err := s.resolve(ctx, itemRef)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, err))
-			continue
-		}
-
-		delivery, err := NormalizeDeliveryEvent(itemDoc.Body)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemDoc.CanonicalRef, err))
-			continue
-		}
+	items := make([]DeliveryEvent, 0, len(loaded))
+	for _, delivery := range loaded {
 		delivery.MatchID = nonEmpty(delivery.MatchID, match.ID)
 		delivery.CompetitionID = nonEmpty(delivery.CompetitionID, match.CompetitionID, match.ID)
 		delivery.EventID = nonEmpty(delivery.EventID, match.EventID)
 		delivery.LeagueID = nonEmpty(delivery.LeagueID, match.LeagueID)
-		items = append(items, *delivery)
+		items = append(items, delivery)
 	}
 
 	s.deliveriesByMatch[key] = append([]DeliveryEvent(nil), items...)
