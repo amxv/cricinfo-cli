@@ -200,6 +200,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatInningsTimelines(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityPlayerStats {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Player Statistics")
+			lines = append(lines, formatPlayerStatistics(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
@@ -326,7 +335,11 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		}
 		return joinParts("situation", valueString(entity, "competitionId"))
 	case EntityPlayer:
-		return joinParts(valueString(entity, "displayName"), bracket(valueString(entity, "id")))
+		return joinParts(firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "fullName"), valueString(entity, "name")), bracket(valueString(entity, "id")))
+	case EntityPlayerStats:
+		return joinParts(firstNonEmpty(valueString(entity, "name"), "statistics"), fmt.Sprintf("%d categories", len(sliceValue(entity, "categories"))))
+	case EntityNewsArticle:
+		return joinParts(firstNonEmpty(valueString(entity, "headline"), valueString(entity, "title"), valueString(entity, "id")), valueString(entity, "published"), valueString(entity, "byline"))
 	case EntityTeam:
 		name := firstNonEmpty(valueString(entity, "name"), valueString(entity, "shortName"), valueString(entity, "id"))
 		return joinParts(name, bracket(valueString(entity, "homeAway")))
@@ -404,7 +417,15 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 			"statusRef", "detailsRef", "teams",
 		}
 	case EntityPlayer:
-		order = []string{"id", "displayName", "fullName", "battingName", "fieldingName", "teamRef", "newsRef"}
+		order = []string{
+			"id", "displayName", "fullName", "name", "firstName", "middleName", "lastName",
+			"battingName", "fieldingName", "gender", "age", "dateOfBirthDisplay",
+			"position", "team", "majorTeams", "debuts", "newsRef",
+		}
+	case EntityPlayerStats:
+		order = []string{"playerId", "name", "abbreviation", "splitId", "categories"}
+	case EntityNewsArticle:
+		order = []string{"id", "headline", "title", "byline", "published", "description", "webUrl"}
 	case EntityTeam:
 		order = []string{"id", "name", "shortName", "homeAway", "scoreRef", "rosterRef", "leadersRef"}
 	case EntityTeamScore:
@@ -567,6 +588,53 @@ func formatInningsTimelines(entity map[string]any) []string {
 
 	if len(overs) == 0 && len(wickets) == 0 {
 		lines = append(lines, "No period timeline data available.")
+	}
+
+	return lines
+}
+
+func formatPlayerStatistics(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+
+	if playerID := valueString(entity, "playerId"); playerID != "" {
+		lines = append(lines, "Player: "+playerID)
+	}
+	if header := joinParts(firstNonEmpty(valueString(entity, "name"), "Statistics"), bracket(valueString(entity, "abbreviation"))); header != "" {
+		lines = append(lines, header)
+	}
+
+	categories := sliceValue(entity, "categories")
+	if len(categories) == 0 {
+		lines = append(lines, "No statistics categories available.")
+		return lines
+	}
+
+	for _, rawCategory := range categories {
+		category, ok := rawCategory.(map[string]any)
+		if !ok {
+			continue
+		}
+		categoryName := firstNonEmpty(valueString(category, "displayName"), valueString(category, "name"))
+		if categoryName == "" {
+			categoryName = "Category"
+		}
+		lines = append(lines, categoryName)
+
+		for idx, rawStat := range sliceValue(category, "stats") {
+			stat, ok := rawStat.(map[string]any)
+			if !ok {
+				continue
+			}
+			row := joinParts(
+				firstNonEmpty(valueString(stat, "displayName"), valueString(stat, "name")),
+				firstNonEmpty(valueString(stat, "displayValue"), valueString(stat, "value")),
+				bracket(valueString(stat, "abbreviation")),
+			)
+			if row == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  %d. %s", idx+1, row))
+		}
 	}
 
 	return lines

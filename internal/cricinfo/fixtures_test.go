@@ -159,6 +159,40 @@ func TestPhase9FixtureNormalizationForWicketSplitsAndPartnershipPayloads(t *test
 	}
 }
 
+func TestPhase10FixtureNormalizationForPlayerProfileAndStats(t *testing.T) {
+	t.Parallel()
+
+	profileBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "players", "athlete-1361257.json"))
+	if err != nil {
+		t.Fatalf("read player profile fixture error: %v", err)
+	}
+	player, err := NormalizePlayer(profileBody)
+	if err != nil {
+		t.Fatalf("NormalizePlayer fixture error: %v", err)
+	}
+	if player.Team == nil || len(player.Styles) == 0 {
+		t.Fatalf("expected normalized team and styles in player profile, got %+v", player)
+	}
+	if len(player.MajorTeams) == 0 {
+		t.Fatalf("expected normalized major teams in player profile")
+	}
+
+	statsBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "players", "athlete-1361257-statistics.json"))
+	if err != nil {
+		t.Fatalf("read player statistics fixture error: %v", err)
+	}
+	playerStats, err := NormalizePlayerStatistics(statsBody)
+	if err != nil {
+		t.Fatalf("NormalizePlayerStatistics fixture error: %v", err)
+	}
+	if len(playerStats.Categories) == 0 {
+		t.Fatalf("expected grouped categories in player statistics fixture")
+	}
+	if len(playerStats.Categories[0].Stats) == 0 {
+		t.Fatalf("expected grouped stats in player statistics fixture")
+	}
+}
+
 func assertFixtureFamilyKeys(t *testing.T, family FixtureFamily, name string) {
 	t.Helper()
 

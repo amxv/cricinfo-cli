@@ -17,6 +17,8 @@ const (
 	EntityMatchScorecard EntityKind = "match_scorecard"
 	EntityMatchSituation EntityKind = "match_situation"
 	EntityPlayer         EntityKind = "player"
+	EntityPlayerStats    EntityKind = "player_statistics"
+	EntityNewsArticle    EntityKind = "news_article"
 	EntityTeam           EntityKind = "team"
 	EntityTeamRoster     EntityKind = "team_roster"
 	EntityTeamScore      EntityKind = "team_score"
@@ -174,20 +176,84 @@ type MatchSituation struct {
 
 // Player is the normalized core player shape.
 type Player struct {
+	Ref                  string              `json:"ref,omitempty"`
+	ID                   string              `json:"id,omitempty"`
+	UID                  string              `json:"uid,omitempty"`
+	GUID                 string              `json:"guid,omitempty"`
+	Type                 string              `json:"type,omitempty"`
+	Name                 string              `json:"name,omitempty"`
+	FirstName            string              `json:"firstName,omitempty"`
+	MiddleName           string              `json:"middleName,omitempty"`
+	LastName             string              `json:"lastName,omitempty"`
+	DisplayName          string              `json:"displayName,omitempty"`
+	FullName             string              `json:"fullName,omitempty"`
+	ShortName            string              `json:"shortName,omitempty"`
+	BattingName          string              `json:"battingName,omitempty"`
+	FieldingName         string              `json:"fieldingName,omitempty"`
+	Gender               string              `json:"gender,omitempty"`
+	Age                  int                 `json:"age,omitempty"`
+	DateOfBirth          string              `json:"dateOfBirth,omitempty"`
+	DateOfBirthDisplay   string              `json:"dateOfBirthDisplay,omitempty"`
+	Active               bool                `json:"active"`
+	Position             string              `json:"position,omitempty"`
+	PositionRef          string              `json:"positionRef,omitempty"`
+	PositionAbbreviation string              `json:"positionAbbreviation,omitempty"`
+	Styles               []PlayerStyle       `json:"styles,omitempty"`
+	Team                 *PlayerAffiliation  `json:"team,omitempty"`
+	MajorTeams           []PlayerAffiliation `json:"majorTeams,omitempty"`
+	Debuts               []PlayerDebut       `json:"debuts,omitempty"`
+	NewsRef              string              `json:"newsRef,omitempty"`
+	Extensions           map[string]any      `json:"extensions,omitempty"`
+}
+
+// PlayerStyle captures batting/bowling handedness or discipline metadata.
+type PlayerStyle struct {
+	Type             string `json:"type,omitempty"`
+	Description      string `json:"description,omitempty"`
+	ShortDescription string `json:"shortDescription,omitempty"`
+}
+
+// PlayerAffiliation captures a player-team relationship from profile payloads.
+type PlayerAffiliation struct {
+	ID   string `json:"id,omitempty"`
+	Ref  string `json:"ref,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+// PlayerDebut captures a debut reference exposed by the athlete profile.
+type PlayerDebut struct {
+	ID   string `json:"id,omitempty"`
+	Ref  string `json:"ref,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+// PlayerStatistics keeps the upstream grouped split/category structure intact.
+type PlayerStatistics struct {
+	Ref          string         `json:"ref,omitempty"`
+	PlayerID     string         `json:"playerId,omitempty"`
+	PlayerRef    string         `json:"playerRef,omitempty"`
+	SplitID      string         `json:"splitId,omitempty"`
+	Name         string         `json:"name,omitempty"`
+	Abbreviation string         `json:"abbreviation,omitempty"`
+	Categories   []StatCategory `json:"categories,omitempty"`
+	Extensions   map[string]any `json:"extensions,omitempty"`
+}
+
+// NewsArticle is a normalized Cricinfo article/story payload.
+type NewsArticle struct {
 	Ref          string         `json:"ref,omitempty"`
 	ID           string         `json:"id,omitempty"`
 	UID          string         `json:"uid,omitempty"`
-	DisplayName  string         `json:"displayName,omitempty"`
-	FullName     string         `json:"fullName,omitempty"`
-	ShortName    string         `json:"shortName,omitempty"`
-	BattingName  string         `json:"battingName,omitempty"`
-	FieldingName string         `json:"fieldingName,omitempty"`
-	Gender       string         `json:"gender,omitempty"`
-	Age          int            `json:"age,omitempty"`
-	TeamRef      string         `json:"teamRef,omitempty"`
-	Position     string         `json:"position,omitempty"`
-	Styles       []string       `json:"styles,omitempty"`
-	NewsRef      string         `json:"newsRef,omitempty"`
+	Type         string         `json:"type,omitempty"`
+	Headline     string         `json:"headline,omitempty"`
+	Title        string         `json:"title,omitempty"`
+	LinkText     string         `json:"linkText,omitempty"`
+	Byline       string         `json:"byline,omitempty"`
+	Description  string         `json:"description,omitempty"`
+	Published    string         `json:"published,omitempty"`
+	LastModified string         `json:"lastModified,omitempty"`
+	WebURL       string         `json:"webUrl,omitempty"`
+	APIURL       string         `json:"apiUrl,omitempty"`
 	Extensions   map[string]any `json:"extensions,omitempty"`
 }
 
@@ -593,6 +659,10 @@ func kindPlural(kind EntityKind) string {
 		return "match situations"
 	case EntityPlayer:
 		return "players"
+	case EntityPlayerStats:
+		return "player statistics"
+	case EntityNewsArticle:
+		return "news articles"
 	case EntityTeam:
 		return "teams"
 	case EntityTeamRoster:

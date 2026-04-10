@@ -48,31 +48,142 @@ func NormalizePlayer(data []byte) (*Player, error) {
 
 	ref := stringField(payload, "$ref")
 	ids := refIDs(ref)
-
-	styles := uniqueStrings(append(styleDescriptions(payload, "style"), styleDescriptions(payload, "styles")...))
+	position := mapField(payload, "position")
+	styles := normalizePlayerStyles(payload)
+	majorTeams := normalizePlayerAffiliations(mapSliceField(payload, "majorTeams"))
+	debuts := normalizePlayerDebuts(mapSliceField(payload, "debuts"))
+	team := normalizePlayerAffiliation(mapField(payload, "team"))
 
 	player := &Player{
-		Ref:          ref,
-		ID:           nonEmpty(stringField(payload, "id"), ids["athleteId"]),
-		UID:          stringField(payload, "uid"),
-		DisplayName:  stringField(payload, "displayName"),
-		FullName:     stringField(payload, "fullName"),
-		ShortName:    stringField(payload, "shortName"),
-		BattingName:  stringField(payload, "battingName"),
-		FieldingName: stringField(payload, "fieldingName"),
-		Gender:       stringField(payload, "gender"),
-		Age:          intField(payload, "age"),
-		TeamRef:      refFromField(payload, "team"),
-		Position:     stringField(mapField(payload, "position"), "name"),
-		Styles:       styles,
-		NewsRef:      refFromField(payload, "news"),
+		Ref:                  ref,
+		ID:                   nonEmpty(stringField(payload, "id"), ids["athleteId"]),
+		UID:                  stringField(payload, "uid"),
+		GUID:                 stringField(payload, "guid"),
+		Type:                 stringField(payload, "type"),
+		Name:                 stringField(payload, "name"),
+		FirstName:            stringField(payload, "firstName"),
+		MiddleName:           stringField(payload, "middleName"),
+		LastName:             stringField(payload, "lastName"),
+		DisplayName:          stringField(payload, "displayName"),
+		FullName:             stringField(payload, "fullName"),
+		ShortName:            stringField(payload, "shortName"),
+		BattingName:          stringField(payload, "battingName"),
+		FieldingName:         stringField(payload, "fieldingName"),
+		Gender:               stringField(payload, "gender"),
+		Age:                  intField(payload, "age"),
+		DateOfBirth:          stringField(payload, "dateOfBirth"),
+		DateOfBirthDisplay:   nonEmpty(stringField(payload, "dateOfBirthStr"), stringField(payload, "dateOfBirth")),
+		Active:               truthyField(payload, "active") || truthyField(payload, "isActive"),
+		Position:             stringField(position, "name"),
+		PositionRef:          stringField(position, "$ref"),
+		PositionAbbreviation: stringField(position, "abbreviation"),
+		Styles:               styles,
+		Team:                 team,
+		MajorTeams:           majorTeams,
+		Debuts:               debuts,
+		NewsRef:              refFromField(payload, "news"),
 		Extensions: extensionsFromMap(payload,
-			"$ref", "id", "uid", "displayName", "fullName", "shortName", "battingName", "fieldingName",
-			"gender", "age", "team", "position", "style", "styles", "news",
+			"$ref", "id", "uid", "guid", "type", "name", "firstName", "middleName", "lastName",
+			"displayName", "fullName", "shortName", "battingName", "fieldingName", "gender", "age",
+			"dateOfBirth", "dateOfBirthStr", "active", "isActive", "team", "position", "style", "styles",
+			"majorTeams", "debuts", "news",
 		),
 	}
 
 	return player, nil
+}
+
+// NormalizePlayerStatistics maps an athlete statistics payload into a grouped split/category view.
+func NormalizePlayerStatistics(data []byte) (*PlayerStatistics, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	ref := stringField(payload, "$ref")
+	ids := refIDs(ref)
+	athleteRef := refFromField(payload, "athlete")
+	splits := mapField(payload, "splits")
+
+	playerStats := &PlayerStatistics{
+		Ref:          ref,
+		PlayerID:     nonEmpty(refIDs(athleteRef)["athleteId"], ids["athleteId"]),
+		PlayerRef:    athleteRef,
+		SplitID:      stringField(splits, "id"),
+		Name:         stringField(splits, "name"),
+		Abbreviation: stringField(splits, "abbreviation"),
+		Categories:   []StatCategory{},
+		Extensions: extensionsFromMap(payload,
+			"$ref", "athlete", "competition", "team", "splits",
+		),
+	}
+
+	for _, item := range mapSliceField(splits, "categories") {
+		stats := make([]StatValue, 0, len(mapSliceField(item, "stats")))
+		for _, statRaw := range mapSliceField(item, "stats") {
+			stats = append(stats, StatValue{
+				Name:         stringField(statRaw, "name"),
+				DisplayName:  stringField(statRaw, "displayName"),
+				ShortName:    stringField(statRaw, "shortDisplayName"),
+				Description:  stringField(statRaw, "description"),
+				Abbreviation: stringField(statRaw, "abbreviation"),
+				DisplayValue: stringField(statRaw, "displayValue"),
+				Value:        statRaw["value"],
+				Type:         stringField(statRaw, "type"),
+				Extensions: extensionsFromMap(statRaw,
+					"name", "displayName", "shortDisplayName", "description", "abbreviation", "displayValue", "value", "type",
+				),
+			})
+		}
+
+		playerStats.Categories = append(playerStats.Categories, StatCategory{
+			Name:         stringField(item, "name"),
+			DisplayName:  nonEmpty(stringField(item, "displayName"), stringField(item, "name")),
+			ShortName:    stringField(item, "shortDisplayName"),
+			Abbreviation: stringField(item, "abbreviation"),
+			Summary:      stringField(item, "summary"),
+			Stats:        stats,
+			Extensions: extensionsFromMap(item,
+				"name", "displayName", "shortDisplayName", "abbreviation", "summary", "stats",
+			),
+		})
+	}
+
+	return playerStats, nil
+}
+
+// NormalizeNewsArticle maps one Cricinfo news payload into a normalized article object.
+func NormalizeNewsArticle(data []byte) (*NewsArticle, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	links := mapField(payload, "links")
+	web := mapField(links, "web")
+	api := mapField(mapField(links, "api"), "v1")
+
+	article := &NewsArticle{
+		Ref:          stringField(payload, "$ref"),
+		ID:           nonEmpty(stringField(payload, "id"), refIDs(stringField(payload, "$ref"))["newsId"]),
+		UID:          stringField(payload, "uid"),
+		Type:         stringField(payload, "type"),
+		Headline:     stringField(payload, "headline"),
+		Title:        stringField(payload, "title"),
+		LinkText:     stringField(payload, "linkText"),
+		Byline:       stringField(payload, "byline"),
+		Description:  stringField(payload, "description"),
+		Published:    stringField(payload, "published"),
+		LastModified: stringField(payload, "lastModified"),
+		WebURL:       stringField(web, "href"),
+		APIURL:       stringField(api, "href"),
+		Extensions: extensionsFromMap(payload,
+			"$ref", "id", "uid", "type", "headline", "title", "linkText", "byline", "description",
+			"published", "lastModified", "links",
+		),
+	}
+
+	return article, nil
 }
 
 // NormalizeTeam maps a competitor/team payload into the normalized team shape.
@@ -1409,6 +1520,73 @@ func nestedRef(payload map[string]any, keys ...string) string {
 	}
 
 	return stringField(current, "$ref")
+}
+
+func normalizePlayerStyles(payload map[string]any) []PlayerStyle {
+	rawStyles := append(mapSliceField(payload, "style"), mapSliceField(payload, "styles")...)
+	if len(rawStyles) == 0 {
+		return nil
+	}
+
+	out := make([]PlayerStyle, 0, len(rawStyles))
+	seen := map[string]struct{}{}
+	for _, raw := range rawStyles {
+		style := PlayerStyle{
+			Type:             stringField(raw, "type"),
+			Description:      stringField(raw, "description"),
+			ShortDescription: stringField(raw, "shortDescription"),
+		}
+		key := strings.Join([]string{style.Type, style.Description, style.ShortDescription}, "|")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, style)
+	}
+	return out
+}
+
+func normalizePlayerAffiliations(items []map[string]any) []PlayerAffiliation {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]PlayerAffiliation, 0, len(items))
+	for _, item := range items {
+		if affiliation := normalizePlayerAffiliation(item); affiliation != nil {
+			out = append(out, *affiliation)
+		}
+	}
+	return out
+}
+
+func normalizePlayerAffiliation(item map[string]any) *PlayerAffiliation {
+	if len(item) == 0 {
+		return nil
+	}
+	ref := stringField(item, "$ref")
+	ids := refIDs(ref)
+	return &PlayerAffiliation{
+		ID:   nonEmpty(stringField(item, "id"), ids["teamId"]),
+		Ref:  ref,
+		Name: nonEmpty(stringField(item, "displayName"), stringField(item, "name"), stringField(item, "shortName")),
+	}
+}
+
+func normalizePlayerDebuts(items []map[string]any) []PlayerDebut {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]PlayerDebut, 0, len(items))
+	for _, item := range items {
+		ref := stringField(item, "$ref")
+		ids := refIDs(ref)
+		out = append(out, PlayerDebut{
+			ID:   nonEmpty(stringField(item, "id"), ids["competitionId"], ids["eventId"]),
+			Ref:  ref,
+			Name: nonEmpty(stringField(item, "displayName"), stringField(item, "name"), stringField(item, "shortName")),
+		})
+	}
+	return out
 }
 
 func styleDescriptions(payload map[string]any, field string) []string {

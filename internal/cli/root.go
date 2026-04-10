@@ -62,14 +62,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&opts.allFields, "all-fields", false, "Include long-tail fields in output")
 
 	root.AddCommand(newMatchesCommand(opts))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"players",
-		"Player discovery, profiles, and match-context statistics.",
-		[]string{
-			"cricinfo players --help",
-			"cricinfo search --help",
-		},
-	))
+	root.AddCommand(newPlayersCommand(opts))
 	root.AddCommand(newTeamsCommand(opts))
 	root.AddCommand(newPlaceholderGroupCommand(
 		"leagues",

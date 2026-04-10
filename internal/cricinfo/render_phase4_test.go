@@ -27,7 +27,7 @@ func TestNormalizeCoreEntitiesFromFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NormalizePlayer error: %v", err)
 	}
-	assertJSONHasKeys(t, player, "id", "displayName", "teamRef", "styles")
+	assertJSONHasKeys(t, player, "id", "displayName", "team", "styles", "majorTeams")
 
 	competitor := mustReadFixtureFile(t, "team-competitor/competitor-789643.json")
 	team, err := NormalizeTeam(competitor)
@@ -123,14 +123,15 @@ func TestNormalizeCoreEntitiesFromFixtures(t *testing.T) {
 	}
 
 	statsBody := mustReadFixtureFile(t, "players/athlete-1361257-statistics.json")
-	categories, err := NormalizeStatCategories(statsBody)
+	playerStats, err := NormalizePlayerStatistics(statsBody)
 	if err != nil {
-		t.Fatalf("NormalizeStatCategories error: %v", err)
+		t.Fatalf("NormalizePlayerStatistics error: %v", err)
 	}
-	if len(categories) == 0 {
+	if len(playerStats.Categories) == 0 {
 		t.Fatal("expected stat categories")
 	}
-	assertJSONHasKeys(t, categories[0], "name", "displayName", "stats")
+	assertJSONHasKeys(t, playerStats, "name", "categories")
+	assertJSONHasKeys(t, playerStats.Categories[0], "name", "displayName", "stats")
 
 	scoreBody := mustReadFixtureFile(t, "team-competitor/scores-789643.json")
 	score, err := NormalizeTeamScore(scoreBody, Team{ID: "789643"}, TeamScopeMatch, "1529474")
@@ -203,8 +204,8 @@ func TestNormalizeExtensionsPreserveLongTailFields(t *testing.T) {
 	if _, ok := player.Extensions["links"]; !ok {
 		t.Fatalf("expected player extensions to preserve links, got keys: %v", mapKeys(player.Extensions))
 	}
-	if _, ok := player.Extensions["majorTeams"]; !ok {
-		t.Fatalf("expected player extensions to preserve majorTeams")
+	if _, ok := player.Extensions["headshot"]; !ok {
+		t.Fatalf("expected player extensions to preserve headshot")
 	}
 
 	detailBody := mustReadFixtureFile(t, "details-plays/detail-110.json")
