@@ -75,7 +75,33 @@ func TestNormalizeCoreEntitiesFromFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NormalizeDeliveryEvent error: %v", err)
 	}
-	assertJSONHasKeys(t, delivery, "id", "period", "overNumber", "ballNumber", "scoreValue", "batsmanRef", "bowlerRef")
+	assertJSONHasKeys(t, delivery, "id", "period", "overNumber", "ballNumber", "scoreValue", "batsmanRef", "bowlerRef", "dismissal", "playType", "bbbTimestamp", "xCoordinate", "yCoordinate")
+
+	matchcardsBody := mustReadFixtureFile(t, "matches-competitions/matchcards-1527966.json")
+	scorecard, err := NormalizeMatchScorecard(matchcardsBody, *match)
+	if err != nil {
+		t.Fatalf("NormalizeMatchScorecard error: %v", err)
+	}
+	assertJSONHasKeys(t, scorecard, "matchId", "battingCards", "bowlingCards", "partnershipCards")
+	if len(scorecard.BattingCards) == 0 {
+		t.Fatalf("expected batting cards in scorecard fixture")
+	}
+	if len(scorecard.BowlingCards) == 0 {
+		t.Fatalf("expected bowling cards in scorecard fixture")
+	}
+	if len(scorecard.PartnershipCards) == 0 {
+		t.Fatalf("expected partnerships cards in scorecard fixture")
+	}
+
+	situationBody := mustReadFixtureFile(t, "matches-competitions/situation-1529474.json")
+	situation, err := NormalizeMatchSituation(situationBody, *match)
+	if err != nil {
+		t.Fatalf("NormalizeMatchSituation error: %v", err)
+	}
+	assertJSONHasKeys(t, situation, "matchId", "oddsRef")
+	if !isSparseSituation(situation) {
+		t.Fatalf("expected sparse situation fixture to normalize as empty data")
+	}
 
 	statsBody := mustReadFixtureFile(t, "players/athlete-1361257-statistics.json")
 	categories, err := NormalizeStatCategories(statsBody)
@@ -146,6 +172,70 @@ func TestNormalizeExtensionsPreserveLongTailFields(t *testing.T) {
 	if _, ok := delivery.Extensions["innings"]; !ok {
 		t.Fatalf("expected delivery extensions to preserve innings")
 	}
+}
+
+func TestRenderScorecardFixtureShowsBattingBowlingPartnershipSections(t *testing.T) {
+	t.Parallel()
+
+	competitionBody := mustReadFixtureFile(t, "matches-competitions/competition.json")
+	match, err := NormalizeMatch(competitionBody)
+	if err != nil {
+		t.Fatalf("NormalizeMatch error: %v", err)
+	}
+
+	matchcardsBody := mustReadFixtureFile(t, "matches-competitions/matchcards-1527966.json")
+	scorecard, err := NormalizeMatchScorecard(matchcardsBody, *match)
+	if err != nil {
+		t.Fatalf("NormalizeMatchScorecard error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, NewDataResult(EntityMatchScorecard, scorecard), RenderOptions{Format: "text"}); err != nil {
+		t.Fatalf("Render scorecard text error: %v", err)
+	}
+	text := buf.String()
+	if !strings.Contains(text, "Batting") {
+		t.Fatalf("expected Batting section in scorecard output, got %q", text)
+	}
+	if !strings.Contains(text, "Bowling") {
+		t.Fatalf("expected Bowling section in scorecard output, got %q", text)
+	}
+	if !strings.Contains(text, "Partnerships") {
+		t.Fatalf("expected Partnerships section in scorecard output, got %q", text)
+	}
+	if !strings.Contains(text, "Suman Shrestha") {
+		t.Fatalf("expected batting player names in scorecard output, got %q", text)
+	}
+	if !strings.Contains(text, "KS Airee") {
+		t.Fatalf("expected bowling player names in scorecard output, got %q", text)
+	}
+}
+
+func TestRenderDeliveryJSONPreservesAdvancedFields(t *testing.T) {
+	t.Parallel()
+
+	detailBody := mustReadFixtureFile(t, "details-plays/detail-110.json")
+	delivery, err := NormalizeDeliveryEvent(detailBody)
+	if err != nil {
+		t.Fatalf("NormalizeDeliveryEvent error: %v", err)
+	}
+
+	result := NewDataResult(EntityDeliveryEvent, delivery)
+	var buf bytes.Buffer
+	if err := Render(&buf, result, RenderOptions{Format: "json"}); err != nil {
+		t.Fatalf("Render delivery json error: %v", err)
+	}
+
+	payload := decodeJSONMap(t, buf.Bytes())
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected data object in delivery json output")
+	}
+	assertMapHasKey(t, data, "dismissal")
+	assertMapHasKey(t, data, "playType")
+	assertMapHasKey(t, data, "bbbTimestamp")
+	assertMapHasKey(t, data, "xCoordinate")
+	assertMapHasKey(t, data, "yCoordinate")
 }
 
 func TestNormalizeEventAndCompetitionMatchDecoding(t *testing.T) {

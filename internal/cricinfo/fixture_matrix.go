@@ -52,6 +52,20 @@ var fixtureSpecs = []FixtureSpec{
 		LiveProbe:   true,
 	},
 	{
+		Family:      FixtureFamilyMatchesCompetition,
+		Name:        "matchcards",
+		Ref:         "/leagues/11132/events/1527966/competitions/1527966/matchcards",
+		FixturePath: "matches-competitions/matchcards-1527966.json",
+		LiveProbe:   false,
+	},
+	{
+		Family:      FixtureFamilyMatchesCompetition,
+		Name:        "situation",
+		Ref:         "/leagues/19138/events/1529474/competitions/1529474/situation",
+		FixturePath: "matches-competitions/situation-1529474.json",
+		LiveProbe:   false,
+	},
+	{
 		Family:      FixtureFamilyDetailsPlays,
 		Name:        "plays-page",
 		Ref:         "/leagues/19138/events/1529474/competitions/1529474/plays?limit=1",

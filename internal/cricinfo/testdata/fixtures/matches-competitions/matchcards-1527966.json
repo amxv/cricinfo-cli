@@ -1,0 +1,368 @@
+
+        {
+            "count":3,
+            "pageIndex":1,
+            "pageSize":25,
+            "pageCount":1,
+            "items":[
+				
+	{
+		"extras":"(b 5, lb 3, w 5, nb 1)",
+		"total":"(all out; 49.5 ovs)",
+		"runs":"220",
+		"typeID":"11",
+		"inningsNumber":"2",
+        "teamName":"Koshi",
+		"headline":"Batting",
+		"playerDetails":[ 
+        {
+                "playerID":"1528895",
+				"playerName":"Suman Shrestha",
+                "dismissal":"bowled",
+                "runs":"65",
+                "ballsFaced":"132",
+                "fours":"5",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1528895.html"
+        }
+        ,
+        {
+                "playerID":"1098914",
+				"playerName":"A Subedi",
+                "dismissal":"caught",
+                "runs":"72",
+                "ballsFaced":"67",
+                "fours":"11",
+                "sixes":"1",
+                "href":"http://www.espncricinfo.com/ci/content/player/1098914.html"
+        }
+        ,
+        {
+                "playerID":"1528444",
+				"playerName":"S Bajgain",
+                "dismissal":"caught",
+                "runs":"0",
+                "ballsFaced":"3",
+                "fours":"0",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1528444.html"
+        }
+        ,
+        {
+                "playerID":"1211612",
+				"playerName":"S Thapaliya",
+                "dismissal":"caught",
+                "runs":"2",
+                "ballsFaced":"14",
+                "fours":"0",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1211612.html"
+        }
+        ,
+        {
+                "playerID":"1530449",
+				"playerName":"Rohan Shah",
+                "dismissal":"bowled",
+                "runs":"32",
+                "ballsFaced":"32",
+                "fours":"1",
+                "sixes":"3",
+                "href":"http://www.espncricinfo.com/ci/content/player/1530449.html"
+        }
+        ,
+        {
+                "playerID":"1147921",
+				"playerName":"S Karki",
+                "dismissal":"lbw",
+                "runs":"4",
+                "ballsFaced":"5",
+                "fours":"0",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1147921.html"
+        }
+        ,
+        {
+                "playerID":"1129974",
+				"playerName":"D Kandel",
+                "dismissal":"run out",
+                "runs":"4",
+                "ballsFaced":"7",
+                "fours":"0",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1129974.html"
+        }
+        ,
+        {
+                "playerID":"1346340",
+				"playerName":"AR Magar",
+                "dismissal":"caught",
+                "runs":"17",
+                "ballsFaced":"23",
+                "fours":"2",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1346340.html"
+        }
+        ,
+        {
+                "playerID":"1528443",
+				"playerName":"PKH Rai",
+                "dismissal":"not out",
+                "runs":"9",
+                "ballsFaced":"13",
+                "fours":"1",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1528443.html"
+        }
+        ,
+        {
+                "playerID":"1346123",
+				"playerName":"BK Mahato",
+                "dismissal":"run out",
+                "runs":"1",
+                "ballsFaced":"3",
+                "fours":"0",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1346123.html"
+        }
+        ,
+        {
+                "playerID":"1247960",
+				"playerName":"G Shrestha",
+                "dismissal":"bowled",
+                "runs":"0",
+                "ballsFaced":"1",
+                "fours":"0",
+                "sixes":"0",
+                "href":"http://www.espncricinfo.com/ci/content/player/1247960.html"
+        }
+         ]
+	}
+								
+			,
+				
+	    {
+			"headline":"Bowling",
+	        "typeID":"12",
+	        "inningsNumber":"2",
+	        "teamName":"Armed Police",
+	        "playerDetails":[ 
+	    {
+	    	"playerID":"1072482",
+	    	"playerName":"KS Airee",
+			"overs":"7.1",
+	        "maidens":"1",
+	        "conceded":"21",
+	        "wickets":"0",
+	        "economyRate":"2.93",
+	        "href":"http://www.espncricinfo.com/ci/content/player/1072482.html",
+	        "nbw":"(2w)"
+	    }
+	    ,
+	    {
+	    	"playerID":"1290591",
+	    	"playerName":"A Gautam",
+			"overs":"10.0",
+	        "maidens":"1",
+	        "conceded":"41",
+	        "wickets":"4",
+	        "economyRate":"4.1",
+	        "href":"http://www.espncricinfo.com/ci/content/player/1290591.html",
+	        "nbw":""
+	    }
+	    ,
+	    {
+	    	"playerID":"446812",
+	    	"playerName":"B Karki",
+			"overs":"10.0",
+	        "maidens":"1",
+	        "conceded":"44",
+	        "wickets":"1",
+	        "economyRate":"4.4",
+	        "href":"http://www.espncricinfo.com/ci/content/player/446812.html",
+	        "nbw":"(2w)"
+	    }
+	    ,
+	    {
+	    	"playerID":"1332891",
+	    	"playerName":"Y Khatri",
+			"overs":"6.0",
+	        "maidens":"0",
+	        "conceded":"41",
+	        "wickets":"0",
+	        "economyRate":"6.83",
+	        "href":"http://www.espncricinfo.com/ci/content/player/1332891.html",
+	        "nbw":""
+	    }
+	    ,
+	    {
+	    	"playerID":"1072488",
+	    	"playerName":"RK Paudel",
+			"overs":"9.5",
+	        "maidens":"1",
+	        "conceded":"44",
+	        "wickets":"2",
+	        "economyRate":"4.47",
+	        "href":"http://www.espncricinfo.com/ci/content/player/1072488.html",
+	        "nbw":""
+	    }
+	    ,
+	    {
+	    	"playerID":"1058497",
+	    	"playerName":"AS Routela",
+			"overs":"6.5",
+	        "maidens":"0",
+	        "conceded":"21",
+	        "wickets":"1",
+	        "economyRate":"3.07",
+	        "href":"http://www.espncricinfo.com/ci/content/player/1058497.html",
+	        "nbw":"(1nb, 1w)"
+	    }
+	     ]
+	    }
+	    							
+			,
+				
+	    {
+			"headline":"Partnerships",
+	        "typeID":"13",
+	        "inningsNumber":"2",
+	        "teamName":"Koshi",
+	        "playerDetails":[ 
+		{
+		   "partnershipRuns":"122",
+		   "partnershipOvers":"25.3",
+		   "fowType":"",
+		   "partnershipWicketName":"1st",
+		   "partnershipRuns":"122",
+		   "fowType":"",
+		   "player2Name":"Suman Shrestha",
+		   "player2Runs":"",
+		   "player1Name":"A Subedi",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"0",
+		   "partnershipOvers":"0.3",
+		   "fowType":"",
+		   "partnershipWicketName":"2nd",
+		   "partnershipRuns":"0",
+		   "fowType":"",
+		   "player2Name":"Suman Shrestha",
+		   "player2Runs":"",
+		   "player1Name":"S Bajgain",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"6",
+		   "partnershipOvers":"4.4",
+		   "fowType":"",
+		   "partnershipWicketName":"3rd",
+		   "partnershipRuns":"6",
+		   "fowType":"",
+		   "player2Name":"Suman Shrestha",
+		   "player2Runs":"",
+		   "player1Name":"S Thapaliya",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"56",
+		   "partnershipOvers":"10.3",
+		   "fowType":"",
+		   "partnershipWicketName":"4th",
+		   "partnershipRuns":"56",
+		   "fowType":"",
+		   "player2Name":"Rohan Shah",
+		   "player2Runs":"",
+		   "player1Name":"Suman Shrestha",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"3",
+		   "partnershipOvers":"0.4",
+		   "fowType":"",
+		   "partnershipWicketName":"5th",
+		   "partnershipRuns":"3",
+		   "fowType":"",
+		   "player2Name":"Rohan Shah",
+		   "player2Runs":"",
+		   "player1Name":"S Karki",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"2",
+		   "partnershipOvers":"0.4",
+		   "fowType":"",
+		   "partnershipWicketName":"6th",
+		   "partnershipRuns":"2",
+		   "fowType":"",
+		   "player2Name":"S Karki",
+		   "player2Runs":"",
+		   "player1Name":"D Kandel",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"7",
+		   "partnershipOvers":"2.2",
+		   "fowType":"",
+		   "partnershipWicketName":"7th",
+		   "partnershipRuns":"7",
+		   "fowType":"",
+		   "player2Name":"AR Magar",
+		   "player2Runs":"",
+		   "player1Name":"D Kandel",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"21",
+		   "partnershipOvers":"4.0",
+		   "fowType":"",
+		   "partnershipWicketName":"8th",
+		   "partnershipRuns":"21",
+		   "fowType":"",
+		   "player2Name":"PKH Rai",
+		   "player2Runs":"",
+		   "player1Name":"AR Magar",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"3",
+		   "partnershipOvers":"0.5",
+		   "fowType":"",
+		   "partnershipWicketName":"9th",
+		   "partnershipRuns":"3",
+		   "fowType":"",
+		   "player2Name":"PKH Rai",
+		   "player2Runs":"",
+		   "player1Name":"BK Mahato",
+		   "player1Runs":""
+		}
+		,
+		{
+		   "partnershipRuns":"0",
+		   "partnershipOvers":"0.1",
+		   "fowType":"",
+		   "partnershipWicketName":"10th",
+		   "partnershipRuns":"0",
+		   "fowType":"",
+		   "player2Name":"PKH Rai",
+		   "player2Runs":"",
+		   "player1Name":"G Shrestha",
+		   "player1Runs":""
+		}
+		 ]
+	    }
+	    							
+			]
+        }
+        
+
+
+

@@ -2,6 +2,8 @@ family	name	ref	fixture_path	live_probe
 root-discovery	root	/v2/sports/cricket	root-discovery/root.json	true
 root-discovery	events-page	/events	root-discovery/events.json	false
 matches-competitions	competition	/leagues/19138/events/1529474/competitions/1529474	matches-competitions/competition.json	true
+matches-competitions	matchcards	/leagues/11132/events/1527966/competitions/1527966/matchcards	matches-competitions/matchcards-1527966.json	false
+matches-competitions	situation	/leagues/19138/events/1529474/competitions/1529474/situation	matches-competitions/situation-1529474.json	false
 details-plays	plays-page	/leagues/19138/events/1529474/competitions/1529474/plays?limit=1	details-plays/plays.json	true
 details-plays	detail-item	/leagues/19138/events/1529474/competitions/1529474/details/110	details-plays/detail-110.json	false
 team-competitor	competitor	/leagues/19138/events/1529474/competitions/1529474/competitors/789643	team-competitor/competitor-789643.json	true

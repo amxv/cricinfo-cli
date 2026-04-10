@@ -14,6 +14,8 @@ type EntityKind string
 
 const (
 	EntityMatch          EntityKind = "match"
+	EntityMatchScorecard EntityKind = "match_scorecard"
+	EntityMatchSituation EntityKind = "match_situation"
 	EntityPlayer         EntityKind = "player"
 	EntityTeam           EntityKind = "team"
 	EntityLeague         EntityKind = "league"
@@ -77,6 +79,92 @@ type Match struct {
 	DetailsRef       string         `json:"detailsRef,omitempty"`
 	Teams            []Team         `json:"teams,omitempty"`
 	Extensions       map[string]any `json:"extensions,omitempty"`
+}
+
+// MatchScorecard is the normalized scorecard view grouped by batting, bowling, and partnerships cards.
+type MatchScorecard struct {
+	Ref              string            `json:"ref,omitempty"`
+	LeagueID         string            `json:"leagueId,omitempty"`
+	EventID          string            `json:"eventId,omitempty"`
+	CompetitionID    string            `json:"competitionId,omitempty"`
+	MatchID          string            `json:"matchId,omitempty"`
+	BattingCards     []BattingCard     `json:"battingCards,omitempty"`
+	BowlingCards     []BowlingCard     `json:"bowlingCards,omitempty"`
+	PartnershipCards []PartnershipCard `json:"partnershipCards,omitempty"`
+	Extensions       map[string]any    `json:"extensions,omitempty"`
+}
+
+// BattingCard is a normalized batting card section from matchcards.
+type BattingCard struct {
+	InningsNumber int                `json:"inningsNumber,omitempty"`
+	TeamName      string             `json:"teamName,omitempty"`
+	Runs          string             `json:"runs,omitempty"`
+	Total         string             `json:"total,omitempty"`
+	Extras        string             `json:"extras,omitempty"`
+	Players       []BattingCardEntry `json:"players,omitempty"`
+}
+
+// BattingCardEntry is a player row in a batting card.
+type BattingCardEntry struct {
+	PlayerID   string `json:"playerId,omitempty"`
+	PlayerName string `json:"playerName,omitempty"`
+	Dismissal  string `json:"dismissal,omitempty"`
+	Runs       string `json:"runs,omitempty"`
+	BallsFaced string `json:"ballsFaced,omitempty"`
+	Fours      string `json:"fours,omitempty"`
+	Sixes      string `json:"sixes,omitempty"`
+	Href       string `json:"href,omitempty"`
+}
+
+// BowlingCard is a normalized bowling card section from matchcards.
+type BowlingCard struct {
+	InningsNumber int                `json:"inningsNumber,omitempty"`
+	TeamName      string             `json:"teamName,omitempty"`
+	Players       []BowlingCardEntry `json:"players,omitempty"`
+}
+
+// BowlingCardEntry is a bowler row in a bowling card.
+type BowlingCardEntry struct {
+	PlayerID    string `json:"playerId,omitempty"`
+	PlayerName  string `json:"playerName,omitempty"`
+	Overs       string `json:"overs,omitempty"`
+	Maidens     string `json:"maidens,omitempty"`
+	Conceded    string `json:"conceded,omitempty"`
+	Wickets     string `json:"wickets,omitempty"`
+	EconomyRate string `json:"economyRate,omitempty"`
+	NBW         string `json:"nbw,omitempty"`
+	Href        string `json:"href,omitempty"`
+}
+
+// PartnershipCard is a normalized partnerships card section from matchcards.
+type PartnershipCard struct {
+	InningsNumber int                    `json:"inningsNumber,omitempty"`
+	TeamName      string                 `json:"teamName,omitempty"`
+	Players       []PartnershipCardEntry `json:"players,omitempty"`
+}
+
+// PartnershipCardEntry is a row in a partnerships card.
+type PartnershipCardEntry struct {
+	PartnershipRuns       string `json:"partnershipRuns,omitempty"`
+	PartnershipOvers      string `json:"partnershipOvers,omitempty"`
+	PartnershipWicketName string `json:"partnershipWicketName,omitempty"`
+	FOWType               string `json:"fowType,omitempty"`
+	Player1Name           string `json:"player1Name,omitempty"`
+	Player1Runs           string `json:"player1Runs,omitempty"`
+	Player2Name           string `json:"player2Name,omitempty"`
+	Player2Runs           string `json:"player2Runs,omitempty"`
+}
+
+// MatchSituation is the normalized match situation payload.
+type MatchSituation struct {
+	Ref           string         `json:"ref,omitempty"`
+	LeagueID      string         `json:"leagueId,omitempty"`
+	EventID       string         `json:"eventId,omitempty"`
+	CompetitionID string         `json:"competitionId,omitempty"`
+	MatchID       string         `json:"matchId,omitempty"`
+	OddsRef       string         `json:"oddsRef,omitempty"`
+	Data          map[string]any `json:"data,omitempty"`
+	Extensions    map[string]any `json:"extensions,omitempty"`
 }
 
 // Player is the normalized core player shape.
@@ -184,9 +272,14 @@ type DeliveryEvent struct {
 	AwayScore     string         `json:"awayScore,omitempty"`
 	BatsmanRef    string         `json:"batsmanRef,omitempty"`
 	BowlerRef     string         `json:"bowlerRef,omitempty"`
+	PlayType      map[string]any `json:"playType,omitempty"`
+	Dismissal     map[string]any `json:"dismissal,omitempty"`
 	DismissalType string         `json:"dismissalType,omitempty"`
 	DismissalText string         `json:"dismissalText,omitempty"`
 	SpeedKPH      float64        `json:"speedKPH,omitempty"`
+	XCoordinate   *float64       `json:"xCoordinate"`
+	YCoordinate   *float64       `json:"yCoordinate"`
+	BBBTimestamp  int64          `json:"bbbTimestamp"`
 	CoordinateX   *float64       `json:"coordinateX,omitempty"`
 	CoordinateY   *float64       `json:"coordinateY,omitempty"`
 	Timestamp     int64          `json:"timestamp,omitempty"`
@@ -329,6 +422,10 @@ func kindPlural(kind EntityKind) string {
 	switch kind {
 	case EntityMatch:
 		return "matches"
+	case EntityMatchScorecard:
+		return "match scorecards"
+	case EntityMatchSituation:
+		return "match situations"
 	case EntityPlayer:
 		return "players"
 	case EntityTeam:

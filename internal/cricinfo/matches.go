@@ -88,6 +88,130 @@ func (s *MatchService) Status(ctx context.Context, query string, opts MatchLooku
 	return s.lookupMatch(ctx, query, opts, true)
 }
 
+// Scorecard resolves and returns matchcards rendered as batting/bowling/partnership views.
+func (s *MatchService) Scorecard(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityMatchScorecard
+		return *passthrough, nil
+	}
+
+	scorecardRef := matchSubresourceRef(*lookup.match, "matchcards", "matchcards")
+	if scorecardRef == "" {
+		return NormalizedResult{
+			Kind:    EntityMatchScorecard,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("scorecard route unavailable for match %q", lookup.match.ID),
+		}, nil
+	}
+
+	resolved, err := s.client.ResolveRefChain(ctx, scorecardRef)
+	if err != nil {
+		return NewTransportErrorResult(EntityMatchScorecard, scorecardRef, err), nil
+	}
+
+	scorecard, err := NormalizeMatchScorecard(resolved.Body, *lookup.match)
+	if err != nil {
+		return NormalizedResult{}, fmt.Errorf("normalize matchcards %q: %w", resolved.CanonicalRef, err)
+	}
+
+	warnings := append([]string{}, lookup.warnings...)
+	result := NewDataResult(EntityMatchScorecard, scorecard)
+	if len(warnings) > 0 {
+		result = NewPartialResult(EntityMatchScorecard, scorecard, warnings...)
+	}
+	result.RequestedRef = resolved.RequestedRef
+	result.CanonicalRef = resolved.CanonicalRef
+	return result, nil
+}
+
+// Details resolves and returns normalized delivery events from the details route.
+func (s *MatchService) Details(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityDeliveryEvent
+		return *passthrough, nil
+	}
+
+	detailsRef := nonEmpty(strings.TrimSpace(lookup.match.DetailsRef), matchSubresourceRef(*lookup.match, "details", "details"))
+	if detailsRef == "" {
+		return NormalizedResult{
+			Kind:    EntityDeliveryEvent,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("details route unavailable for match %q", lookup.match.ID),
+		}, nil
+	}
+
+	return s.deliveryEventsFromRoute(ctx, detailsRef, lookup.warnings)
+}
+
+// Plays resolves and returns normalized delivery events from the plays route.
+func (s *MatchService) Plays(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityDeliveryEvent
+		return *passthrough, nil
+	}
+
+	playsRef := matchSubresourceRef(*lookup.match, "plays", "plays")
+	if playsRef == "" {
+		return NormalizedResult{
+			Kind:    EntityDeliveryEvent,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("plays route unavailable for match %q", lookup.match.ID),
+		}, nil
+	}
+
+	return s.deliveryEventsFromRoute(ctx, playsRef, lookup.warnings)
+}
+
+// Situation resolves and returns normalized match situation data.
+func (s *MatchService) Situation(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityMatchSituation
+		return *passthrough, nil
+	}
+
+	situationRef := matchSubresourceRef(*lookup.match, "situation", "situation")
+	if situationRef == "" {
+		return NormalizedResult{
+			Kind:    EntityMatchSituation,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("situation route unavailable for match %q", lookup.match.ID),
+		}, nil
+	}
+
+	resolved, err := s.client.ResolveRefChain(ctx, situationRef)
+	if err != nil {
+		return NewTransportErrorResult(EntityMatchSituation, situationRef, err), nil
+	}
+
+	situation, err := NormalizeMatchSituation(resolved.Body, *lookup.match)
+	if err != nil {
+		return NormalizedResult{}, fmt.Errorf("normalize situation %q: %w", resolved.CanonicalRef, err)
+	}
+
+	if isSparseSituation(situation) {
+		result := NormalizedResult{
+			Kind:         EntityMatchSituation,
+			Status:       ResultStatusEmpty,
+			RequestedRef: resolved.RequestedRef,
+			CanonicalRef: resolved.CanonicalRef,
+			Message:      "no situation data available for this match",
+		}
+		return result, nil
+	}
+
+	result := NewDataResult(EntityMatchSituation, situation)
+	if len(lookup.warnings) > 0 {
+		result = NewPartialResult(EntityMatchSituation, situation, lookup.warnings...)
+	}
+	result.RequestedRef = resolved.RequestedRef
+	result.CanonicalRef = resolved.CanonicalRef
+	return result, nil
+}
+
 func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions, liveOnly bool) (NormalizedResult, error) {
 	resolved, err := s.client.ResolveRefChain(ctx, "/events")
 	if err != nil {
@@ -148,13 +272,48 @@ func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions
 }
 
 func (s *MatchService) lookupMatch(ctx context.Context, query string, opts MatchLookupOptions, statusOnly bool) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		return *passthrough, nil
+	}
+
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	warnings := make([]string, 0, len(lookup.warnings)+2)
+	warnings = append(warnings, lookup.warnings...)
+
+	hydrationWarnings := s.hydrateMatch(ctx, lookup.match, statusCache, teamCache, scoreCache)
+	warnings = append(warnings, hydrationWarnings...)
+
+	if statusOnly {
+		lookup.match.Extensions = nil
+	}
+
+	result := NewDataResult(EntityMatch, lookup.match)
+	if len(warnings) > 0 {
+		result = NewPartialResult(EntityMatch, lookup.match, warnings...)
+	}
+	result.RequestedRef = lookup.resolved.RequestedRef
+	result.CanonicalRef = lookup.resolved.CanonicalRef
+	return result, nil
+}
+
+type matchLookup struct {
+	match    *Match
+	resolved *ResolvedDocument
+	warnings []string
+}
+
+func (s *MatchService) resolveMatchLookup(ctx context.Context, query string, opts MatchLookupOptions) (*matchLookup, *NormalizedResult) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return NormalizedResult{
+		result := NormalizedResult{
 			Kind:    EntityMatch,
 			Status:  ResultStatusEmpty,
 			Message: "match query is required",
-		}, nil
+		}
+		return nil, &result
 	}
 
 	searchResult, err := s.resolver.Search(ctx, EntityMatch, query, ResolveOptions{
@@ -162,52 +321,91 @@ func (s *MatchService) lookupMatch(ctx context.Context, query string, opts Match
 		LeagueID: strings.TrimSpace(opts.LeagueID),
 	})
 	if err != nil {
-		return NormalizedResult{}, err
+		result := NewTransportErrorResult(EntityMatch, query, err)
+		return nil, &result
 	}
 	if len(searchResult.Entities) == 0 {
-		return NormalizedResult{
+		result := NormalizedResult{
 			Kind:    EntityMatch,
 			Status:  ResultStatusEmpty,
 			Message: fmt.Sprintf("no matches found for %q", query),
-		}, nil
+		}
+		return nil, &result
 	}
 
 	entity := searchResult.Entities[0]
 	ref := buildMatchRef(entity)
 	if ref == "" {
-		return NormalizedResult{
+		result := NormalizedResult{
 			Kind:    EntityMatch,
 			Status:  ResultStatusEmpty,
 			Message: fmt.Sprintf("unable to resolve match ref for %q", query),
-		}, nil
+		}
+		return nil, &result
 	}
 
 	resolved, err := s.client.ResolveRefChain(ctx, ref)
 	if err != nil {
-		return NewTransportErrorResult(EntityMatch, ref, err), nil
+		result := NewTransportErrorResult(EntityMatch, ref, err)
+		return nil, &result
 	}
 
 	match, err := NormalizeMatch(resolved.Body)
 	if err != nil {
-		return NormalizedResult{}, fmt.Errorf("normalize competition match %q: %w", resolved.CanonicalRef, err)
+		result := NormalizedResult{
+			Kind:    EntityMatch,
+			Status:  ResultStatusError,
+			Message: fmt.Sprintf("normalize competition match %q: %v", resolved.CanonicalRef, err),
+		}
+		return nil, &result
 	}
 
-	statusCache := map[string]matchStatusSnapshot{}
-	teamCache := map[string]teamIdentity{}
-	scoreCache := map[string]string{}
-	warnings := make([]string, 0, len(searchResult.Warnings)+2)
-	warnings = append(warnings, searchResult.Warnings...)
+	return &matchLookup{
+		match:    match,
+		resolved: resolved,
+		warnings: searchResult.Warnings,
+	}, nil
+}
 
-	hydrationWarnings := s.hydrateMatch(ctx, match, statusCache, teamCache, scoreCache)
-	warnings = append(warnings, hydrationWarnings...)
-
-	if statusOnly {
-		match.Extensions = nil
+func (s *MatchService) deliveryEventsFromRoute(ctx context.Context, ref string, baseWarnings []string) (NormalizedResult, error) {
+	resolved, err := s.client.ResolveRefChain(ctx, ref)
+	if err != nil {
+		return NewTransportErrorResult(EntityDeliveryEvent, ref, err), nil
 	}
 
-	result := NewDataResult(EntityMatch, match)
+	page, err := DecodePage[Ref](resolved.Body)
+	if err != nil {
+		return NormalizedResult{}, fmt.Errorf("decode detail page %q: %w", resolved.CanonicalRef, err)
+	}
+
+	events := make([]any, 0, len(page.Items))
+	warnings := make([]string, 0, len(baseWarnings))
+	warnings = append(warnings, baseWarnings...)
+
+	for _, item := range page.Items {
+		itemRef := strings.TrimSpace(item.URL)
+		if itemRef == "" {
+			warnings = append(warnings, "skip detail item with empty ref")
+			continue
+		}
+
+		itemResolved, itemErr := s.client.ResolveRefChain(ctx, itemRef)
+		if itemErr != nil {
+			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, itemErr))
+			continue
+		}
+
+		delivery, normalizeErr := NormalizeDeliveryEvent(itemResolved.Body)
+		if normalizeErr != nil {
+			warnings = append(warnings, fmt.Sprintf("detail %s: %v", itemRef, normalizeErr))
+			continue
+		}
+		events = append(events, *delivery)
+	}
+
+	result := NewListResult(EntityDeliveryEvent, events)
 	if len(warnings) > 0 {
-		result = NewPartialResult(EntityMatch, match, warnings...)
+		result = NewPartialListResult(EntityDeliveryEvent, events, warnings...)
 	}
 	result.RequestedRef = resolved.RequestedRef
 	result.CanonicalRef = resolved.CanonicalRef
@@ -407,6 +605,63 @@ func buildMatchRef(entity IndexedEntity) string {
 	}
 
 	return fmt.Sprintf("/leagues/%s/events/%s/competitions/%s", leagueID, eventID, matchID)
+}
+
+func matchSubresourceRef(match Match, extensionKey, suffix string) string {
+	extensionKey = strings.TrimSpace(extensionKey)
+	suffix = strings.Trim(strings.TrimSpace(suffix), "/")
+
+	if extensionKey != "" {
+		if ref := extensionRef(match.Extensions, extensionKey); ref != "" {
+			return ref
+		}
+	}
+
+	base := strings.TrimSpace(match.Ref)
+	if base != "" {
+		if suffix == "" {
+			return base
+		}
+		return strings.TrimRight(base, "/") + "/" + suffix
+	}
+
+	leagueID := strings.TrimSpace(match.LeagueID)
+	eventID := strings.TrimSpace(match.EventID)
+	competitionID := strings.TrimSpace(match.CompetitionID)
+	if competitionID == "" {
+		competitionID = strings.TrimSpace(match.ID)
+	}
+	if leagueID == "" || eventID == "" || competitionID == "" {
+		return ""
+	}
+
+	base = fmt.Sprintf("/leagues/%s/events/%s/competitions/%s", leagueID, eventID, competitionID)
+	if suffix == "" {
+		return base
+	}
+	return base + "/" + suffix
+}
+
+func extensionRef(extensions map[string]any, key string) string {
+	if extensions == nil {
+		return ""
+	}
+	raw, ok := extensions[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	refMap, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(stringField(refMap, "$ref"))
+}
+
+func isSparseSituation(situation *MatchSituation) bool {
+	if situation == nil {
+		return true
+	}
+	return len(situation.Data) == 0
 }
 
 func isLiveMatch(match Match) bool {

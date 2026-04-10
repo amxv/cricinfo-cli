@@ -14,6 +14,10 @@ type matchCommandService interface {
 	Live(ctx context.Context, opts cricinfo.MatchListOptions) (cricinfo.NormalizedResult, error)
 	Show(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Status(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Scorecard(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Details(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Plays(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Situation(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 }
 
 type matchRuntimeOptions struct {
@@ -132,7 +136,87 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(liveCmd, listCmd, showCmd, statusCmd)
+	scorecardCmd := &cobra.Command{
+		Use:   "scorecard <match>",
+		Short: "Show batting, bowling, and partnerships scorecards for one match",
+		Long: strings.Join([]string{
+			"Resolve a match and render normalized batting, bowling, and partnerships scorecard views.",
+			"",
+			"Next steps:",
+			"  cricinfo matches details <match>",
+			"  cricinfo matches plays <match>",
+			"  cricinfo matches situation <match>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Scorecard(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+
+	detailsCmd := &cobra.Command{
+		Use:   "details <match>",
+		Short: "Show normalized delivery events from match details",
+		Long: strings.Join([]string{
+			"Resolve a match and render normalized detail delivery events with batsman/bowler refs, score value, dismissal, and over context.",
+			"",
+			"Next steps:",
+			"  cricinfo matches plays <match>",
+			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches situation <match>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Details(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+
+	playsCmd := &cobra.Command{
+		Use:   "plays <match>",
+		Short: "Show normalized delivery events from match plays",
+		Long: strings.Join([]string{
+			"Resolve a match and render normalized play delivery events.",
+			"",
+			"Next steps:",
+			"  cricinfo matches details <match>",
+			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches situation <match>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Plays(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+
+	situationCmd := &cobra.Command{
+		Use:   "situation <match>",
+		Short: "Show match situation data when available",
+		Long: strings.Join([]string{
+			"Resolve a match and render normalized situation data. Sparse situation payloads are treated as valid empty results.",
+			"",
+			"Next steps:",
+			"  cricinfo matches status <match>",
+			"  cricinfo matches details <match>",
+			"  cricinfo matches scorecard <match>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Situation(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+
+	cmd.AddCommand(liveCmd, listCmd, showCmd, statusCmd, scorecardCmd, detailsCmd, playsCmd, situationCmd)
 	return cmd
 }
 

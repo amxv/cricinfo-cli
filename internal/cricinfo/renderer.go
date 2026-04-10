@@ -173,6 +173,16 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 	}
 
 	if result.Data != nil {
+		if result.Kind == EntityMatchScorecard {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Match Scorecard")
+			lines = append(lines, formatMatchScorecard(itemMap)...)
+			return writeTextLines(w, lines)
+		}
+
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
 			return err
@@ -286,6 +296,17 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 			)
 		}
 		return joinParts(id, desc, teams, state, score, date)
+	case EntityMatchScorecard:
+		return joinParts(
+			fmt.Sprintf("batting %d", len(sliceValue(entity, "battingCards"))),
+			fmt.Sprintf("bowling %d", len(sliceValue(entity, "bowlingCards"))),
+			fmt.Sprintf("partnerships %d", len(sliceValue(entity, "partnershipCards"))),
+		)
+	case EntityMatchSituation:
+		if data := valueString(entity, "data"); data != "" {
+			return joinParts("situation", data)
+		}
+		return joinParts("situation", valueString(entity, "competitionId"))
 	case EntityPlayer:
 		return joinParts(valueString(entity, "displayName"), bracket(valueString(entity, "id")))
 	case EntityTeam:
@@ -346,7 +367,14 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	case EntityInnings:
 		order = []string{"id", "period", "runs", "wickets", "overs", "score", "description"}
 	case EntityDeliveryEvent:
-		order = []string{"id", "period", "overNumber", "ballNumber", "scoreValue", "shortText", "dismissalType"}
+		order = []string{
+			"id", "period", "overNumber", "ballNumber", "scoreValue", "shortText",
+			"playType", "dismissal", "dismissalType", "bbbTimestamp", "xCoordinate", "yCoordinate",
+		}
+	case EntityMatchScorecard:
+		order = []string{"matchId", "competitionId", "eventId", "leagueId", "battingCards", "bowlingCards", "partnershipCards"}
+	case EntityMatchSituation:
+		order = []string{"matchId", "competitionId", "eventId", "leagueId", "oddsRef", "data"}
 	case EntityStatCategory:
 		order = []string{"name", "displayName", "abbreviation"}
 	case EntityPartnership:
@@ -378,6 +406,149 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 		}
 	}
 
+	return lines
+}
+
+func formatMatchScorecard(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+
+	if matchID := firstNonEmpty(valueString(entity, "matchId"), valueString(entity, "competitionId")); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+
+	batting := sliceValue(entity, "battingCards")
+	if len(batting) > 0 {
+		lines = append(lines, "Batting")
+		lines = append(lines, formatBattingCards(batting)...)
+	}
+
+	bowling := sliceValue(entity, "bowlingCards")
+	if len(bowling) > 0 {
+		lines = append(lines, "Bowling")
+		lines = append(lines, formatBowlingCards(bowling)...)
+	}
+
+	partnerships := sliceValue(entity, "partnershipCards")
+	if len(partnerships) > 0 {
+		lines = append(lines, "Partnerships")
+		lines = append(lines, formatPartnershipCards(partnerships)...)
+	}
+
+	if len(batting) == 0 && len(bowling) == 0 && len(partnerships) == 0 {
+		lines = append(lines, "No scorecard sections available.")
+	}
+
+	return lines
+}
+
+func formatBattingCards(cards []any) []string {
+	lines := make([]string, 0, len(cards)*6)
+	for _, rawCard := range cards {
+		card, ok := rawCard.(map[string]any)
+		if !ok {
+			continue
+		}
+		header := joinParts(
+			"Innings "+valueString(card, "inningsNumber"),
+			valueString(card, "teamName"),
+			valueString(card, "runs"),
+			valueString(card, "total"),
+		)
+		if strings.TrimSpace(header) != "" {
+			lines = append(lines, header)
+		}
+		for idx, rawPlayer := range sliceValue(card, "players") {
+			player, ok := rawPlayer.(map[string]any)
+			if !ok {
+				continue
+			}
+			score := valueString(player, "runs")
+			if balls := valueString(player, "ballsFaced"); balls != "" {
+				score = strings.TrimSpace(joinParts(score, "("+balls+" balls)"))
+			}
+			boundary := joinParts("4s "+valueString(player, "fours"), "6s "+valueString(player, "sixes"))
+			row := joinParts(valueString(player, "playerName"), score, boundary, valueString(player, "dismissal"))
+			if row == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  %d. %s", idx+1, row))
+		}
+	}
+	return lines
+}
+
+func formatBowlingCards(cards []any) []string {
+	lines := make([]string, 0, len(cards)*6)
+	for _, rawCard := range cards {
+		card, ok := rawCard.(map[string]any)
+		if !ok {
+			continue
+		}
+		header := joinParts("Innings "+valueString(card, "inningsNumber"), valueString(card, "teamName"))
+		if strings.TrimSpace(header) != "" {
+			lines = append(lines, header)
+		}
+		for idx, rawPlayer := range sliceValue(card, "players") {
+			player, ok := rawPlayer.(map[string]any)
+			if !ok {
+				continue
+			}
+			figures := joinParts(
+				"overs "+valueString(player, "overs"),
+				"maidens "+valueString(player, "maidens"),
+				"runs "+valueString(player, "conceded"),
+				"wkts "+valueString(player, "wickets"),
+				"econ "+valueString(player, "economyRate"),
+			)
+			row := joinParts(valueString(player, "playerName"), figures, valueString(player, "nbw"))
+			if row == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  %d. %s", idx+1, row))
+		}
+	}
+	return lines
+}
+
+func formatPartnershipCards(cards []any) []string {
+	lines := make([]string, 0, len(cards)*6)
+	for _, rawCard := range cards {
+		card, ok := rawCard.(map[string]any)
+		if !ok {
+			continue
+		}
+		header := joinParts("Innings "+valueString(card, "inningsNumber"), valueString(card, "teamName"))
+		if strings.TrimSpace(header) != "" {
+			lines = append(lines, header)
+		}
+		for idx, rawPlayer := range sliceValue(card, "players") {
+			player, ok := rawPlayer.(map[string]any)
+			if !ok {
+				continue
+			}
+			runs := valueString(player, "partnershipRuns")
+			runsText := ""
+			if runs != "" {
+				runsText = runs + " runs"
+			}
+			overs := valueString(player, "partnershipOvers")
+			oversText := ""
+			if overs != "" {
+				oversText = overs + " overs"
+			}
+			pair := joinParts(valueString(player, "player1Name"), valueString(player, "player2Name"))
+			detail := joinParts(
+				valueString(player, "partnershipWicketName"),
+				runsText,
+				oversText,
+			)
+			row := joinParts(pair, detail)
+			if row == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  %d. %s", idx+1, row))
+		}
+	}
 	return lines
 }
 

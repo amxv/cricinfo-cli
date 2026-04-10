@@ -210,7 +210,11 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 	ref := stringField(payload, "$ref")
 	ids := refIDs(ref)
 	over := mapField(payload, "over")
+	playType := mapField(payload, "playType")
 	dismissal := mapField(payload, "dismissal")
+	xCoordinate := nullableFloatField(payload, "xCoordinate")
+	yCoordinate := nullableFloatField(payload, "yCoordinate")
+	bbbTimestamp := int64Field(payload, "bbbTimestamp")
 
 	event := &DeliveryEvent{
 		Ref:           ref,
@@ -226,19 +230,162 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 		AwayScore:     stringField(payload, "awayScore"),
 		BatsmanRef:    nestedRef(payload, "batsman", "athlete"),
 		BowlerRef:     nestedRef(payload, "bowler", "athlete"),
+		PlayType:      playType,
+		Dismissal:     dismissal,
 		DismissalType: stringField(dismissal, "type"),
 		DismissalText: stringField(dismissal, "text"),
 		SpeedKPH:      floatField(payload, "speedKPH"),
-		CoordinateX:   nullableFloatField(payload, "xCoordinate"),
-		CoordinateY:   nullableFloatField(payload, "yCoordinate"),
-		Timestamp:     int64Field(payload, "bbbTimestamp"),
+		XCoordinate:   xCoordinate,
+		YCoordinate:   yCoordinate,
+		BBBTimestamp:  bbbTimestamp,
+		CoordinateX:   xCoordinate,
+		CoordinateY:   yCoordinate,
+		Timestamp:     bbbTimestamp,
 		Extensions: extensionsFromMap(payload,
 			"$ref", "id", "period", "periodText", "over", "scoreValue", "shortText", "text", "homeScore", "awayScore",
-			"batsman", "bowler", "dismissal", "speedKPH", "xCoordinate", "yCoordinate", "bbbTimestamp",
+			"batsman", "bowler", "playType", "dismissal", "speedKPH", "xCoordinate", "yCoordinate", "bbbTimestamp",
 		),
 	}
 
 	return event, nil
+}
+
+// NormalizeMatchScorecard maps a matchcards payload into batting, bowling, and partnerships views.
+func NormalizeMatchScorecard(data []byte, match Match) (*MatchScorecard, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	scorecard := &MatchScorecard{
+		Ref:              nonEmpty(stringField(payload, "$ref"), matchSubresourceRef(match, "matchcards", "matchcards")),
+		LeagueID:         match.LeagueID,
+		EventID:          match.EventID,
+		CompetitionID:    match.CompetitionID,
+		MatchID:          match.ID,
+		BattingCards:     []BattingCard{},
+		BowlingCards:     []BowlingCard{},
+		PartnershipCards: []PartnershipCard{},
+		Extensions: extensionsFromMap(payload,
+			"$ref", "count", "items", "pageCount", "pageIndex", "pageSize",
+		),
+	}
+
+	for _, item := range mapSliceField(payload, "items") {
+		headline := strings.ToLower(strings.TrimSpace(stringField(item, "headline")))
+		typeID := strings.TrimSpace(stringField(item, "typeID"))
+
+		switch {
+		case headline == "batting" || typeID == "11":
+			scorecard.BattingCards = append(scorecard.BattingCards, normalizeBattingCard(item))
+		case headline == "bowling" || typeID == "12":
+			scorecard.BowlingCards = append(scorecard.BowlingCards, normalizeBowlingCard(item))
+		case headline == "partnerships" || typeID == "13":
+			scorecard.PartnershipCards = append(scorecard.PartnershipCards, normalizePartnershipCard(item))
+		default:
+			// Preserve unclassified card payloads for --all-fields without failing command execution.
+			if scorecard.Extensions == nil {
+				scorecard.Extensions = map[string]any{}
+			}
+			unknown, _ := scorecard.Extensions["unknownCards"].([]any)
+			scorecard.Extensions["unknownCards"] = append(unknown, item)
+		}
+	}
+
+	return scorecard, nil
+}
+
+// NormalizeMatchSituation maps a situation payload into a stable shape that tolerates sparse data.
+func NormalizeMatchSituation(data []byte, match Match) (*MatchSituation, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	situation := &MatchSituation{
+		Ref:           nonEmpty(stringField(payload, "$ref"), matchSubresourceRef(match, "situation", "situation")),
+		LeagueID:      match.LeagueID,
+		EventID:       match.EventID,
+		CompetitionID: match.CompetitionID,
+		MatchID:       match.ID,
+		OddsRef:       refFromField(payload, "odds"),
+		Data:          extensionsFromMap(payload, "$ref", "odds"),
+	}
+
+	return situation, nil
+}
+
+func normalizeBattingCard(payload map[string]any) BattingCard {
+	card := BattingCard{
+		InningsNumber: parseInt(stringField(payload, "inningsNumber")),
+		TeamName:      stringField(payload, "teamName"),
+		Runs:          stringField(payload, "runs"),
+		Total:         stringField(payload, "total"),
+		Extras:        stringField(payload, "extras"),
+		Players:       []BattingCardEntry{},
+	}
+
+	for _, row := range mapSliceField(payload, "playerDetails") {
+		card.Players = append(card.Players, BattingCardEntry{
+			PlayerID:   stringField(row, "playerID"),
+			PlayerName: stringField(row, "playerName"),
+			Dismissal:  stringField(row, "dismissal"),
+			Runs:       stringField(row, "runs"),
+			BallsFaced: stringField(row, "ballsFaced"),
+			Fours:      stringField(row, "fours"),
+			Sixes:      stringField(row, "sixes"),
+			Href:       stringField(row, "href"),
+		})
+	}
+
+	return card
+}
+
+func normalizeBowlingCard(payload map[string]any) BowlingCard {
+	card := BowlingCard{
+		InningsNumber: parseInt(stringField(payload, "inningsNumber")),
+		TeamName:      stringField(payload, "teamName"),
+		Players:       []BowlingCardEntry{},
+	}
+
+	for _, row := range mapSliceField(payload, "playerDetails") {
+		card.Players = append(card.Players, BowlingCardEntry{
+			PlayerID:    stringField(row, "playerID"),
+			PlayerName:  stringField(row, "playerName"),
+			Overs:       stringField(row, "overs"),
+			Maidens:     stringField(row, "maidens"),
+			Conceded:    stringField(row, "conceded"),
+			Wickets:     stringField(row, "wickets"),
+			EconomyRate: stringField(row, "economyRate"),
+			NBW:         stringField(row, "nbw"),
+			Href:        stringField(row, "href"),
+		})
+	}
+
+	return card
+}
+
+func normalizePartnershipCard(payload map[string]any) PartnershipCard {
+	card := PartnershipCard{
+		InningsNumber: parseInt(stringField(payload, "inningsNumber")),
+		TeamName:      stringField(payload, "teamName"),
+		Players:       []PartnershipCardEntry{},
+	}
+
+	for _, row := range mapSliceField(payload, "playerDetails") {
+		card.Players = append(card.Players, PartnershipCardEntry{
+			PartnershipRuns:       stringField(row, "partnershipRuns"),
+			PartnershipOvers:      stringField(row, "partnershipOvers"),
+			PartnershipWicketName: stringField(row, "partnershipWicketName"),
+			FOWType:               stringField(row, "fowType"),
+			Player1Name:           stringField(row, "player1Name"),
+			Player1Runs:           stringField(row, "player1Runs"),
+			Player2Name:           stringField(row, "player2Name"),
+			Player2Runs:           stringField(row, "player2Runs"),
+		})
+	}
+
+	return card
 }
 
 // NormalizeStatCategories maps a stats payload into normalized category entries.
