@@ -1,19 +1,19 @@
 # AGENTS.md
 
-Guidance for coding agents working in `go-cli-template`.
+Guidance for coding agents working in `cricinfo-cli`.
 
 ## Purpose
 
-This repo is a generic starter for Go command-line tools distributed through npm.
+This repo is a Cricinfo Go command-line tool distributed through npm.
 
-The sample command is `mycli`. Replace it with your actual CLI name and behavior.
+The sample command is `cricinfo-cli`. Replace it with your actual CLI name and behavior.
 
 ## Architecture
 
-- `cmd/mycli/main.go`: process entrypoint, error handling, exits non-zero on failure.
+- `cmd/cricinfo-cli/main.go`: process entrypoint, error handling, exits non-zero on failure.
 - `internal/app/app.go`: command parser + handlers.
 - `internal/app/app_test.go`: starter tests.
-- `bin/mycli.js`: npm shim that invokes packaged native binary.
+- `bin/cricinfo-cli.js`: npm shim that invokes packaged native binary.
 - `scripts/postinstall.js`: downloads release binary on install, falls back to `go build`.
 - `.github/workflows/release.yml`: tag-driven release pipeline.
 
@@ -39,9 +39,9 @@ Direct commands:
 ## How to customize safely
 
 1. Rename CLI command consistently in all places:
-- directory `cmd/mycli`
+- directory `cmd/cricinfo-cli`
 - `package.json` values (`bin`, `config.cliBinaryName`)
-- `bin/mycli.js`
+- `bin/cricinfo-cli.js`
 - workflow env `CLI_BINARY`
 - `Makefile` `BIN_NAME`
 

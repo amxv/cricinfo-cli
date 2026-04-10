@@ -1,3 +1,3 @@
-module github.com/amxv/go-cli-template
+module github.com/amxv/cricinfo-cli
 
 go 1.26

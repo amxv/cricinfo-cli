@@ -14,14 +14,14 @@ Maintainer notes for this template repository.
 ```bash
 make check
 make build
-./dist/mycli --help
+./dist/cricinfo-cli --help
 ```
 
 Install command locally:
 
 ```bash
 make install-local
-mycli --help
+cricinfo-cli --help
 ```
 
 ## Release process
@@ -51,7 +51,7 @@ make release-tag VERSION=0.1.0
 Set via GitHub CLI:
 
 ```bash
-gh secret set NPM_TOKEN --repo amxv/go-cli-template
+gh secret set NPM_TOKEN --repo amxv/cricinfo-cli
 ```
 
 ## npm token setup

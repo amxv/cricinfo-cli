@@ -1,25 +1,25 @@
 {
-  "name": "@amxv/go-cli-template",
+  "name": "@amxv/cricinfo-cli",
   "version": "0.1.0",
-  "description": "Template for shipping a Go CLI via npm with GitHub release automation",
+  "description": "Cricinfo command line interface",
   "license": "MIT",
   "author": "amxv",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amxv/go-cli-template.git"
+    "url": "git+https://github.com/amxv/cricinfo-cli.git"
   },
-  "homepage": "https://github.com/amxv/go-cli-template#readme",
+  "homepage": "https://github.com/amxv/cricinfo-cli#readme",
   "bugs": {
-    "url": "https://github.com/amxv/go-cli-template/issues"
+    "url": "https://github.com/amxv/cricinfo-cli/issues"
   },
   "bin": {
-    "mycli": "bin/mycli.js"
+    "cricinfo-cli": "bin/cricinfo-cli.js"
   },
   "config": {
-    "cliBinaryName": "mycli"
+    "cliBinaryName": "cricinfo-cli"
   },
   "files": [
-    "bin/mycli.js",
+    "bin/cricinfo-cli.js",
     "scripts/postinstall.js",
     "cmd",
     "internal",
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "test": "node --check bin/mycli.js && node --check scripts/postinstall.js",
+    "test": "node --check bin/cricinfo-cli.js && node --check scripts/postinstall.js",
     "lint": "npm run test"
   },
   "engines": {

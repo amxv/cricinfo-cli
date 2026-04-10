@@ -1,32 +1,32 @@
-# go-cli-template
+# cricinfo-cli
 
 Minimal template for shipping a Go CLI with:
 
 - a local command runner (`Makefile`)
-- npm global install wrapper (`bin/mycli.js`)
+- npm global install wrapper (`bin/cricinfo-cli.js`)
 - automatic GitHub Release + npm publish on tag
 
-## Install (template example)
+## Install
 
 ```bash
-npm i -g @amxv/go-cli-template
-mycli --help
+npm i -g @amxv/cricinfo-cli
+cricinfo-cli --help
 ```
 
 ## Commands in this starter
 
 ```bash
-mycli --help
-mycli hello
-mycli hello <name>
-mycli --version
+cricinfo-cli --help
+cricinfo-cli hello
+cricinfo-cli hello <name>
+cricinfo-cli --version
 ```
 
 ## Customize this template
 
 1. Rename your command and entrypoint:
-- `cmd/mycli`
-- `bin/mycli.js`
+- `cmd/cricinfo-cli`
+- `bin/cricinfo-cli.js`
 - `package.json` (`bin`, `config.cliBinaryName`)
 - `.github/workflows/release.yml` (`CLI_BINARY`)
 
@@ -44,7 +44,7 @@ mycli --version
 
 ## Project layout
 
-- `cmd/mycli/main.go`: CLI entrypoint
+- `cmd/cricinfo-cli/main.go`: CLI entrypoint
 - `internal/app/`: command logic
 - `internal/buildinfo/`: build-time version plumbing for `--version`
 - `scripts/postinstall.js`: installs binary from GitHub release (falls back to local `go build`)
