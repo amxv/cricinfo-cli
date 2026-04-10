@@ -46,6 +46,10 @@ const (
 	EntityStatCategory    EntityKind = "stat_category"
 	EntityPartnership     EntityKind = "partnership"
 	EntityFallOfWicket    EntityKind = "fall_of_wicket"
+	EntityAnalysisDismiss EntityKind = "analysis_dismissal"
+	EntityAnalysisBowl    EntityKind = "analysis_bowling"
+	EntityAnalysisBat     EntityKind = "analysis_batting"
+	EntityAnalysisPart    EntityKind = "analysis_partnership"
 )
 
 // ResultStatus standardizes output states across render formats.
@@ -767,6 +771,60 @@ type FallOfWicket struct {
 	Extensions   map[string]any `json:"extensions,omitempty"`
 }
 
+// AnalysisScope captures the resolved analysis traversal scope.
+type AnalysisScope struct {
+	Mode            string           `json:"mode"`
+	LeagueID        string           `json:"leagueId,omitempty"`
+	LeagueName      string           `json:"leagueName,omitempty"`
+	Seasons         []string         `json:"seasons,omitempty"`
+	MatchIDs        []string         `json:"matchIds,omitempty"`
+	MatchCount      int              `json:"matchCount"`
+	DateFrom        string           `json:"dateFrom,omitempty"`
+	DateTo          string           `json:"dateTo,omitempty"`
+	TypeQuery       string           `json:"type,omitempty"`
+	GroupQuery      string           `json:"group,omitempty"`
+	HydrationMetric HydrationMetrics `json:"hydrationMetrics,omitempty"`
+}
+
+// AnalysisFilters captures user-level row filters.
+type AnalysisFilters struct {
+	TeamQuery     string `json:"team,omitempty"`
+	PlayerQuery   string `json:"player,omitempty"`
+	DismissalType string `json:"dismissalType,omitempty"`
+	Innings       int    `json:"innings,omitempty"`
+	Period        int    `json:"period,omitempty"`
+}
+
+// AnalysisRow is one ranked row in an analysis response.
+type AnalysisRow struct {
+	Rank          int            `json:"rank"`
+	Key           string         `json:"key"`
+	Metric        string         `json:"metric,omitempty"`
+	Value         float64        `json:"value"`
+	Count         int            `json:"count,omitempty"`
+	Matches       int            `json:"matches,omitempty"`
+	PlayerID      string         `json:"playerId,omitempty"`
+	PlayerName    string         `json:"playerName,omitempty"`
+	TeamID        string         `json:"teamId,omitempty"`
+	TeamName      string         `json:"teamName,omitempty"`
+	LeagueID      string         `json:"leagueId,omitempty"`
+	SeasonID      string         `json:"seasonId,omitempty"`
+	DismissalType string         `json:"dismissalType,omitempty"`
+	InningsNumber int            `json:"inningsNumber,omitempty"`
+	Period        int            `json:"period,omitempty"`
+	Extras        map[string]any `json:"extras,omitempty"`
+}
+
+// AnalysisView is the stable agent-friendly analysis payload.
+type AnalysisView struct {
+	Command string          `json:"command"`
+	Metric  string          `json:"metric,omitempty"`
+	Scope   AnalysisScope   `json:"scope"`
+	GroupBy []string        `json:"groupBy"`
+	Filters AnalysisFilters `json:"filters,omitempty"`
+	Rows    []AnalysisRow   `json:"rows"`
+}
+
 // NewDataResult creates a successful single-entity result.
 func NewDataResult(kind EntityKind, data any) NormalizedResult {
 	return NormalizedResult{
@@ -924,6 +982,14 @@ func kindPlural(kind EntityKind) string {
 		return "partnerships"
 	case EntityFallOfWicket:
 		return "fall-of-wicket entries"
+	case EntityAnalysisDismiss:
+		return "analysis dismissals"
+	case EntityAnalysisBowl:
+		return "analysis bowling rows"
+	case EntityAnalysisBat:
+		return "analysis batting rows"
+	case EntityAnalysisPart:
+		return "analysis partnerships"
 	default:
 		return "results"
 	}

@@ -209,6 +209,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatPlayerStatistics(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityAnalysisDismiss || result.Kind == EntityAnalysisBowl || result.Kind == EntityAnalysisBat || result.Kind == EntityAnalysisPart {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Analysis")
+			lines = append(lines, formatAnalysisView(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
@@ -456,6 +465,12 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 			valueString(entity, "wicketOver")+" ov",
 			"innings "+valueString(entity, "inningsId")+"/"+valueString(entity, "period"),
 		)
+	case EntityAnalysisDismiss, EntityAnalysisBowl, EntityAnalysisBat, EntityAnalysisPart:
+		return joinParts(
+			valueString(entity, "key"),
+			valueString(entity, "metric"),
+			valueString(entity, "value"),
+		)
 	default:
 		if summary := valueString(entity, "id"); summary != "" {
 			return summary
@@ -565,6 +580,10 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 		order = []string{"teamName", "teamId", "inningsId", "period", "wicketNumber", "wicketName", "runs", "overs", "runRate", "batsmen"}
 	case EntityFallOfWicket:
 		order = []string{"teamName", "teamId", "inningsId", "period", "wicketNumber", "wicketOver", "runs", "runsScored", "ballsFaced", "athleteRef"}
+	case EntityAnalysisDismiss, EntityAnalysisBowl, EntityAnalysisBat, EntityAnalysisPart:
+		order = []string{
+			"command", "metric", "scope", "groupBy", "filters", "rows",
+		}
 	}
 
 	lines := make([]string, 0, len(order)+2)
@@ -911,6 +930,69 @@ func formatTeamLeaders(entity map[string]any) []string {
 		lines = append(lines, "No leaderboard categories available.")
 	}
 
+	return lines
+}
+
+func formatAnalysisView(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+	if command := valueString(entity, "command"); command != "" {
+		lines = append(lines, "Command: "+command)
+	}
+	if metric := valueString(entity, "metric"); metric != "" {
+		lines = append(lines, "Metric: "+metric)
+	}
+
+	scopeMap, _ := entity["scope"].(map[string]any)
+	if scopeMap != nil {
+		mode := valueString(scopeMap, "mode")
+		league := firstNonEmpty(valueString(scopeMap, "leagueName"), valueString(scopeMap, "leagueId"))
+		matchCount := valueString(scopeMap, "matchCount")
+		lines = append(lines, "Scope: "+joinParts(mode, league, "matches "+matchCount))
+		if seasons := sliceValue(scopeMap, "seasons"); len(seasons) > 0 {
+			seasonParts := make([]string, 0, len(seasons))
+			for _, season := range seasons {
+				if asString, ok := season.(string); ok && strings.TrimSpace(asString) != "" {
+					seasonParts = append(seasonParts, strings.TrimSpace(asString))
+				}
+			}
+			if len(seasonParts) > 0 {
+				lines = append(lines, "Seasons: "+strings.Join(seasonParts, ", "))
+			}
+		}
+	}
+
+	if groupBy := stringSliceValue(entity, "groupBy"); len(groupBy) > 0 {
+		lines = append(lines, "Group By: "+strings.Join(groupBy, ", "))
+	}
+
+	rows := sliceValue(entity, "rows")
+	if len(rows) == 0 {
+		lines = append(lines, "No ranked rows found.")
+		return lines
+	}
+
+	lines = append(lines, "Rows")
+	for i, raw := range rows {
+		row, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		line := joinParts(
+			"#"+valueString(row, "rank"),
+			valueString(row, "key"),
+			valueString(row, "value"),
+		)
+		if count := valueString(row, "count"); count != "" {
+			line = joinParts(line, "count "+count)
+		}
+		if matches := valueString(row, "matches"); matches != "" {
+			line = joinParts(line, "matches "+matches)
+		}
+		if line == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  %d. %s", i+1, line))
+	}
 	return lines
 }
 

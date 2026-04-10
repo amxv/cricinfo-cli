@@ -69,14 +69,7 @@ func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	root.AddCommand(newStandingsCommand(opts))
 	root.AddCommand(newCompetitionsCommand(opts))
 	root.AddCommand(newSearchCommand(opts))
-	root.AddCommand(newPlaceholderGroupCommand(
-		"analysis",
-		"Derived cricket analysis over normalized command output.",
-		[]string{
-			"cricinfo analysis --help",
-			"cricinfo matches --help",
-		},
-	))
+	root.AddCommand(newAnalysisCommand(opts))
 
 	return root
 }

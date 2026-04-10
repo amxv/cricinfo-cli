@@ -92,21 +92,7 @@ func (s *HistoricalHydrationService) Close() error {
 
 // BeginScope resolves the requested historical scope and returns a run-scoped hydration session.
 func (s *HistoricalHydrationService) BeginScope(ctx context.Context, opts HistoricalScopeOptions) (*HistoricalScopeSession, error) {
-	session := &HistoricalScopeSession{
-		client:                s.client,
-		resolver:              s.resolver,
-		opts:                  opts,
-		resolvedDocs:          map[string]*ResolvedDocument{},
-		statusByRef:           map[string]matchStatusSnapshot{},
-		teamIdentityByRef:     map[string]teamIdentity{},
-		teamScoreByRef:        map[string]string{},
-		inningsByMatch:        map[string][]Innings{},
-		ingsWarningsByMatch:   map[string][]string{},
-		playersByMatch:        map[string][]PlayerMatch{},
-		playerWarningsByMatch: map[string][]string{},
-		deliveriesByMatch:     map[string][]DeliveryEvent{},
-		deliveryWarnByMatch:   map[string][]string{},
-	}
+	session := newHistoricalScopeSession(s.client, s.resolver, opts)
 
 	if err := session.initialize(ctx); err != nil {
 		return nil, err
@@ -137,14 +123,36 @@ type HistoricalScopeSession struct {
 	hydratedMatches []Match
 	matchWarnings   []string
 
-	inningsByMatch        map[string][]Innings
-	ingsWarningsByMatch   map[string][]string
-	playersByMatch        map[string][]PlayerMatch
-	playerWarningsByMatch map[string][]string
-	deliveriesByMatch     map[string][]DeliveryEvent
-	deliveryWarnByMatch   map[string][]string
+	inningsByMatch         map[string][]Innings
+	ingsWarningsByMatch    map[string][]string
+	playersByMatch         map[string][]PlayerMatch
+	playerWarningsByMatch  map[string][]string
+	deliveriesByMatch      map[string][]DeliveryEvent
+	deliveryWarnByMatch    map[string][]string
+	partnershipsByMatch    map[string][]Partnership
+	partnershipWarnByMatch map[string][]string
 
 	metrics HydrationMetrics
+}
+
+func newHistoricalScopeSession(client *Client, resolver *Resolver, opts HistoricalScopeOptions) *HistoricalScopeSession {
+	return &HistoricalScopeSession{
+		client:                 client,
+		resolver:               resolver,
+		opts:                   opts,
+		resolvedDocs:           map[string]*ResolvedDocument{},
+		statusByRef:            map[string]matchStatusSnapshot{},
+		teamIdentityByRef:      map[string]teamIdentity{},
+		teamScoreByRef:         map[string]string{},
+		inningsByMatch:         map[string][]Innings{},
+		ingsWarningsByMatch:    map[string][]string{},
+		playersByMatch:         map[string][]PlayerMatch{},
+		playerWarningsByMatch:  map[string][]string{},
+		deliveriesByMatch:      map[string][]DeliveryEvent{},
+		deliveryWarnByMatch:    map[string][]string{},
+		partnershipsByMatch:    map[string][]Partnership{},
+		partnershipWarnByMatch: map[string][]string{},
+	}
 }
 
 // Scope returns resolved scope metadata.
@@ -404,6 +412,97 @@ func (s *HistoricalScopeSession) HydrateDeliverySummaries(ctx context.Context, m
 	s.deliveriesByMatch[key] = append([]DeliveryEvent(nil), items...)
 	s.deliveryWarnByMatch[key] = compactWarnings(warnings)
 	return append([]DeliveryEvent(nil), items...), append([]string(nil), s.deliveryWarnByMatch[key]...), nil
+}
+
+// HydratePartnershipSummaries hydrates detailed partnerships for one scoped match.
+func (s *HistoricalScopeSession) HydratePartnershipSummaries(ctx context.Context, matchID string) ([]Partnership, []string, error) {
+	key, match, err := s.matchByID(matchID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if cached, ok := s.partnershipsByMatch[key]; ok {
+		s.metrics.DomainCacheHits++
+		warnings := append([]string(nil), s.partnershipWarnByMatch[key]...)
+		return append([]Partnership(nil), cached...), warnings, nil
+	}
+	s.metrics.DomainCacheMisses++
+
+	innings, inningsWarnings, err := s.HydrateInnings(ctx, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	items := make([]Partnership, 0)
+	warnings := append([]string{}, inningsWarnings...)
+	for _, inn := range innings {
+		ref := strings.TrimSpace(inn.PartnershipsRef)
+		if ref == "" {
+			continue
+		}
+
+		pageDoc, err := s.resolve(ctx, ref)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("partnerships %s: %v", ref, err))
+			continue
+		}
+
+		page, err := DecodePage[Ref](pageDoc.Body)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("decode partnerships page %s: %v", pageDoc.CanonicalRef, err))
+			continue
+		}
+
+		for _, item := range page.Items {
+			itemRef := strings.TrimSpace(item.URL)
+			if itemRef == "" {
+				continue
+			}
+			itemDoc, err := s.resolve(ctx, itemRef)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("partnership %s: %v", itemRef, err))
+				continue
+			}
+			partnership, err := NormalizePartnership(itemDoc.Body)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("partnership %s: %v", itemDoc.CanonicalRef, err))
+				continue
+			}
+
+			partnership.MatchID = nonEmpty(partnership.MatchID, match.ID)
+			partnership.TeamID = nonEmpty(partnership.TeamID, inn.TeamID)
+			partnership.TeamName = nonEmpty(partnership.TeamName, inn.TeamName)
+			partnership.InningsID = nonEmpty(partnership.InningsID, fmt.Sprintf("%d", inn.InningsNumber))
+			partnership.Period = nonEmpty(partnership.Period, fmt.Sprintf("%d", inn.Period))
+			if partnership.Order == 0 {
+				partnership.Order = partnership.WicketNumber
+			}
+			items = append(items, *partnership)
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].TeamID != items[j].TeamID {
+			return items[i].TeamID < items[j].TeamID
+		}
+		if items[i].InningsID != items[j].InningsID {
+			return items[i].InningsID < items[j].InningsID
+		}
+		if items[i].Period != items[j].Period {
+			return items[i].Period < items[j].Period
+		}
+		if items[i].Order != items[j].Order {
+			return items[i].Order < items[j].Order
+		}
+		if items[i].Runs != items[j].Runs {
+			return items[i].Runs > items[j].Runs
+		}
+		return items[i].ID < items[j].ID
+	})
+
+	s.partnershipsByMatch[key] = append([]Partnership(nil), items...)
+	s.partnershipWarnByMatch[key] = compactWarnings(warnings)
+	return append([]Partnership(nil), items...), append([]string(nil), s.partnershipWarnByMatch[key]...), nil
 }
 
 func (s *HistoricalScopeSession) initialize(ctx context.Context) error {
@@ -1459,7 +1558,12 @@ func parseMatchTime(match Match) (time.Time, bool) {
 		return time.Time{}, false
 	}
 
-	formats := []string{time.RFC3339, "2006-01-02"}
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04Z07:00",
+		"2006-01-02T15:04Z",
+		"2006-01-02",
+	}
 	for _, layout := range formats {
 		parsed, err := time.Parse(layout, value)
 		if err != nil {
