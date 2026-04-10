@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/amxv/cricinfo-cli/internal/cricinfo"
@@ -18,11 +19,18 @@ type matchCommandService interface {
 	Details(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Plays(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Situation(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Innings(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
+	Partnerships(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
+	FallOfWicket(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
+	Deliveries(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
 }
 
 type matchRuntimeOptions struct {
 	limit    int
 	leagueID string
+	team     string
+	innings  int
+	period   int
 }
 
 var newMatchService = func() (matchCommandService, error) {
@@ -216,7 +224,156 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(liveCmd, listCmd, showCmd, statusCmd, scorecardCmd, detailsCmd, playsCmd, situationCmd)
+	inningsCmd := &cobra.Command{
+		Use:   "innings <match>",
+		Short: "Show innings summaries with over and wicket timelines",
+		Long: strings.Join([]string{
+			"Resolve a match and return normalized innings summaries.",
+			"Use --team to focus on one team competitor.",
+			"",
+			"Next steps:",
+			"  cricinfo matches partnerships <match> --team <team> --innings <n> --period <n>",
+			"  cricinfo matches fow <match> --team <team> --innings <n> --period <n>",
+			"  cricinfo matches deliveries <match> --team <team> --innings <n> --period <n>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Innings(ctx, query, cricinfo.MatchInningsOptions{
+					LeagueID:  opts.leagueID,
+					TeamQuery: opts.team,
+				})
+			})
+		},
+	}
+	inningsCmd.Flags().StringVar(&opts.team, "team", "", "Optional: team ID/ref/alias to scope innings")
+
+	partnershipsCmd := &cobra.Command{
+		Use:   "partnerships <match>",
+		Short: "Show partnerships for a selected team innings period",
+		Long: strings.Join([]string{
+			"Resolve one match and team, select innings/period, and render detailed partnership objects.",
+			"",
+			"Required flags:",
+			"  --team <team>",
+			"  --innings <n>",
+			"  --period <n>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.team) == "" {
+				return fmt.Errorf("--team is required")
+			}
+			if opts.innings <= 0 {
+				return fmt.Errorf("--innings is required")
+			}
+			if opts.period <= 0 {
+				return fmt.Errorf("--period is required")
+			}
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Partnerships(ctx, query, cricinfo.MatchInningsOptions{
+					LeagueID:  opts.leagueID,
+					TeamQuery: opts.team,
+					Innings:   opts.innings,
+					Period:    opts.period,
+				})
+			})
+		},
+	}
+	partnershipsCmd.Flags().StringVar(&opts.team, "team", "", "Required: team ID/ref/alias")
+	partnershipsCmd.Flags().IntVar(&opts.innings, "innings", 0, "Required: innings number")
+	partnershipsCmd.Flags().IntVar(&opts.period, "period", 0, "Required: period number")
+
+	fowCmd := &cobra.Command{
+		Use:   "fow <match>",
+		Short: "Show fall-of-wicket entries for a selected team innings period",
+		Long: strings.Join([]string{
+			"Resolve one match and team, select innings/period, and render detailed fall-of-wicket objects.",
+			"",
+			"Required flags:",
+			"  --team <team>",
+			"  --innings <n>",
+			"  --period <n>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.team) == "" {
+				return fmt.Errorf("--team is required")
+			}
+			if opts.innings <= 0 {
+				return fmt.Errorf("--innings is required")
+			}
+			if opts.period <= 0 {
+				return fmt.Errorf("--period is required")
+			}
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.FallOfWicket(ctx, query, cricinfo.MatchInningsOptions{
+					LeagueID:  opts.leagueID,
+					TeamQuery: opts.team,
+					Innings:   opts.innings,
+					Period:    opts.period,
+				})
+			})
+		},
+	}
+	fowCmd.Flags().StringVar(&opts.team, "team", "", "Required: team ID/ref/alias")
+	fowCmd.Flags().IntVar(&opts.innings, "innings", 0, "Required: innings number")
+	fowCmd.Flags().IntVar(&opts.period, "period", 0, "Required: period number")
+
+	deliveriesCmd := &cobra.Command{
+		Use:   "deliveries <match>",
+		Short: "Show over-by-over and wicket timelines for a selected innings period",
+		Long: strings.Join([]string{
+			"Resolve one match and team, select innings/period, and render normalized over and wicket timelines from period statistics.",
+			"",
+			"Required flags:",
+			"  --team <team>",
+			"  --innings <n>",
+			"  --period <n>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.team) == "" {
+				return fmt.Errorf("--team is required")
+			}
+			if opts.innings <= 0 {
+				return fmt.Errorf("--innings is required")
+			}
+			if opts.period <= 0 {
+				return fmt.Errorf("--period is required")
+			}
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Deliveries(ctx, query, cricinfo.MatchInningsOptions{
+					LeagueID:  opts.leagueID,
+					TeamQuery: opts.team,
+					Innings:   opts.innings,
+					Period:    opts.period,
+				})
+			})
+		},
+	}
+	deliveriesCmd.Flags().StringVar(&opts.team, "team", "", "Required: team ID/ref/alias")
+	deliveriesCmd.Flags().IntVar(&opts.innings, "innings", 0, "Required: innings number")
+	deliveriesCmd.Flags().IntVar(&opts.period, "period", 0, "Required: period number")
+
+	cmd.AddCommand(
+		liveCmd,
+		listCmd,
+		showCmd,
+		statusCmd,
+		scorecardCmd,
+		detailsCmd,
+		playsCmd,
+		situationCmd,
+		inningsCmd,
+		partnershipsCmd,
+		fowCmd,
+		deliveriesCmd,
+	)
 	return cmd
 }
 

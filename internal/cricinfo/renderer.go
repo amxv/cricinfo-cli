@@ -191,6 +191,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatTeamLeaders(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityInnings {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Innings")
+			lines = append(lines, formatInningsTimelines(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
@@ -348,7 +357,12 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		if score == "" {
 			score = joinParts(valueString(entity, "runs")+"/"+valueString(entity, "wickets"), valueString(entity, "overs")+" ov")
 		}
-		return joinParts("innings "+valueString(entity, "period"), score)
+		return joinParts(
+			firstNonEmpty(valueString(entity, "teamName"), valueString(entity, "teamId")),
+			"innings "+valueString(entity, "inningsNumber")+"/"+valueString(entity, "period"),
+			score,
+			fmt.Sprintf("%d wickets", len(sliceValue(entity, "wicketTimeline"))),
+		)
 	case EntityDeliveryEvent:
 		short := firstNonEmpty(valueString(entity, "shortText"), valueString(entity, "text"))
 		if short == "" {
@@ -358,9 +372,19 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 	case EntityStatCategory:
 		return joinParts(firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "name")), fmt.Sprintf("%d stats", len(sliceValue(entity, "stats"))))
 	case EntityPartnership:
-		return joinParts("partnership "+valueString(entity, "id"), "innings "+valueString(entity, "inningsId"))
+		return joinParts(
+			firstNonEmpty(valueString(entity, "wicketName"), "partnership "+valueString(entity, "id")),
+			valueString(entity, "runs")+" runs",
+			valueString(entity, "overs")+" ov",
+			"innings "+valueString(entity, "inningsId")+"/"+valueString(entity, "period"),
+		)
 	case EntityFallOfWicket:
-		return joinParts("wicket "+valueString(entity, "wicketNumber"), "innings "+valueString(entity, "inningsId"))
+		return joinParts(
+			"wicket "+valueString(entity, "wicketNumber"),
+			valueString(entity, "runs")+"/"+valueString(entity, "wicketNumber"),
+			valueString(entity, "wicketOver")+" ov",
+			"innings "+valueString(entity, "inningsId")+"/"+valueString(entity, "period"),
+		)
 	default:
 		if summary := valueString(entity, "id"); summary != "" {
 			return summary
@@ -392,7 +416,12 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	case EntityStandingsGroup:
 		order = []string{"id", "seasonId", "groupId"}
 	case EntityInnings:
-		order = []string{"id", "period", "runs", "wickets", "overs", "score", "description"}
+		order = []string{
+			"teamName", "teamId", "matchId", "inningsNumber", "period",
+			"runs", "wickets", "overs", "score", "description",
+			"statisticsRef", "partnershipsRef", "fallOfWicketRef",
+			"overTimeline", "wicketTimeline",
+		}
 	case EntityDeliveryEvent:
 		order = []string{
 			"id", "period", "overNumber", "ballNumber", "scoreValue", "shortText",
@@ -405,9 +434,9 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	case EntityStatCategory:
 		order = []string{"name", "displayName", "abbreviation"}
 	case EntityPartnership:
-		order = []string{"id", "inningsId", "period", "order"}
+		order = []string{"teamName", "teamId", "inningsId", "period", "wicketNumber", "wicketName", "runs", "overs", "runRate", "batsmen"}
 	case EntityFallOfWicket:
-		order = []string{"id", "inningsId", "wicketNumber"}
+		order = []string{"teamName", "teamId", "inningsId", "period", "wicketNumber", "wicketOver", "runs", "runsScored", "ballsFaced", "athleteRef"}
 	}
 
 	lines := make([]string, 0, len(order)+2)
@@ -463,6 +492,81 @@ func formatMatchScorecard(entity map[string]any) []string {
 
 	if len(batting) == 0 && len(bowling) == 0 && len(partnerships) == 0 {
 		lines = append(lines, "No scorecard sections available.")
+	}
+
+	return lines
+}
+
+func formatInningsTimelines(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+
+	if teamName := firstNonEmpty(valueString(entity, "teamName"), valueString(entity, "teamId")); teamName != "" {
+		lines = append(lines, "Team: "+teamName)
+	}
+	if matchID := firstNonEmpty(valueString(entity, "matchId"), valueString(entity, "competitionId")); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+
+	header := joinParts(
+		"Innings "+valueString(entity, "inningsNumber")+"/"+valueString(entity, "period"),
+		valueString(entity, "score"),
+	)
+	if strings.TrimSpace(header) == "" {
+		header = joinParts(
+			"Innings "+valueString(entity, "inningsNumber")+"/"+valueString(entity, "period"),
+			valueString(entity, "runs")+"/"+valueString(entity, "wickets"),
+			valueString(entity, "overs")+" ov",
+		)
+	}
+	if header != "" {
+		lines = append(lines, header)
+	}
+
+	overs := sliceValue(entity, "overTimeline")
+	if len(overs) > 0 {
+		lines = append(lines, "Over Timeline")
+		for _, rawOver := range overs {
+			over, ok := rawOver.(map[string]any)
+			if !ok {
+				continue
+			}
+			row := joinParts(
+				"Over "+valueString(over, "number"),
+				valueString(over, "runs")+" runs",
+				valueString(over, "wicketCount")+" wkts",
+			)
+			if row != "" {
+				lines = append(lines, "  "+row)
+			}
+		}
+	}
+
+	wickets := sliceValue(entity, "wicketTimeline")
+	if len(wickets) > 0 {
+		lines = append(lines, "Wicket Timeline")
+		for idx, rawWicket := range wickets {
+			wicket, ok := rawWicket.(map[string]any)
+			if !ok {
+				continue
+			}
+			row := joinParts(
+				"#"+valueString(wicket, "number"),
+				valueString(wicket, "fow"),
+				valueString(wicket, "over")+" ov",
+				firstNonEmpty(valueString(wicket, "shortText"), valueString(wicket, "detailShortText")),
+			)
+			if row == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  %d. %s", idx+1, row))
+			if detailRef := valueString(wicket, "detailRef"); detailRef != "" {
+				lines = append(lines, "     detail: "+detailRef)
+			}
+		}
+	}
+
+	if len(overs) == 0 && len(wickets) == 0 {
+		lines = append(lines, "No period timeline data available.")
 	}
 
 	return lines

@@ -368,31 +368,157 @@ func NormalizeInnings(data []byte) (*Innings, error) {
 	if err != nil {
 		return nil, err
 	}
+	return normalizeInningsFromMap(payload), nil
+}
 
+func normalizeInningsFromMap(payload map[string]any) *Innings {
 	ref := stringField(payload, "$ref")
 	ids := refIDs(ref)
+	inningsNumber := parseInt(ids["inningsId"])
+	period := intField(payload, "period")
+	if period == 0 {
+		period = parseInt(ids["periodId"])
+	}
 
 	innings := &Innings{
 		Ref:             ref,
 		ID:              ids["inningsId"],
-		Period:          intField(payload, "period"),
+		LeagueID:        ids["leagueId"],
+		EventID:         ids["eventId"],
+		CompetitionID:   ids["competitionId"],
+		MatchID:         ids["competitionId"],
+		TeamID:          ids["competitorId"],
+		InningsNumber:   inningsNumber,
+		Period:          period,
 		Runs:            intField(payload, "runs"),
 		Wickets:         intField(payload, "wickets"),
 		Overs:           floatField(payload, "overs"),
 		Score:           stringField(payload, "score"),
 		Description:     stringField(payload, "description"),
 		Target:          intField(payload, "target"),
+		IsBatting:       truthyField(payload, "isBatting"),
+		IsCurrent:       truthyField(payload, "isCurrent"),
+		Fours:           intField(payload, "fours"),
+		Sixes:           intField(payload, "sixes"),
 		StatisticsRef:   refFromField(payload, "statistics"),
 		LeadersRef:      refFromField(payload, "leaders"),
 		PartnershipsRef: refFromField(payload, "partnerships"),
 		FallOfWicketRef: refFromField(payload, "fow"),
 		Extensions: extensionsFromMap(payload,
 			"$ref", "period", "runs", "wickets", "overs", "score", "description", "target",
+			"isBatting", "isCurrent", "fours", "sixes", "value", "displayValue", "source", "followOn",
 			"statistics", "leaders", "partnerships", "fow",
 		),
 	}
 
-	return innings, nil
+	return innings
+}
+
+// NormalizeInningsPeriodStatistics maps period statistics payloads into over and wicket timelines.
+func NormalizeInningsPeriodStatistics(data []byte) ([]InningsOver, []InningsWicket, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	splits := mapField(payload, "splits")
+	if splits == nil {
+		return []InningsOver{}, []InningsWicket{}, nil
+	}
+
+	overs := normalizeOverTimeline(splits)
+	wickets := make([]InningsWicket, 0)
+	for _, over := range overs {
+		wickets = append(wickets, over.Wickets...)
+	}
+
+	return overs, wickets, nil
+}
+
+func normalizeOverTimeline(splits map[string]any) []InningsOver {
+	if splits == nil {
+		return []InningsOver{}
+	}
+
+	rawOvers, ok := splits["overs"]
+	if !ok || rawOvers == nil {
+		return []InningsOver{}
+	}
+
+	rows := make([]map[string]any, 0)
+	switch typed := rawOvers.(type) {
+	case []any:
+		for _, entry := range typed {
+			switch rowOrSlice := entry.(type) {
+			case map[string]any:
+				rows = append(rows, rowOrSlice)
+			case []any:
+				for _, nested := range rowOrSlice {
+					row, ok := nested.(map[string]any)
+					if !ok {
+						continue
+					}
+					rows = append(rows, row)
+				}
+			}
+		}
+	}
+
+	overs := make([]InningsOver, 0, len(rows))
+	for _, row := range rows {
+		wickets := normalizeTimelineWickets(row)
+		overs = append(overs, InningsOver{
+			Number:      intField(row, "number"),
+			Runs:        intField(row, "runs"),
+			WicketCount: len(wickets),
+			Wickets:     wickets,
+			Extensions:  extensionsFromMap(row, "number", "runs", "wicket"),
+		})
+	}
+
+	return overs
+}
+
+func normalizeTimelineWickets(overRow map[string]any) []InningsWicket {
+	if overRow == nil {
+		return []InningsWicket{}
+	}
+	rawWickets, ok := overRow["wicket"]
+	if !ok || rawWickets == nil {
+		return []InningsWicket{}
+	}
+
+	entries, ok := rawWickets.([]any)
+	if !ok {
+		return []InningsWicket{}
+	}
+
+	wickets := make([]InningsWicket, 0, len(entries))
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		details := mapField(entry, "details")
+		wickets = append(wickets, InningsWicket{
+			Number:          intField(entry, "number"),
+			FOW:             stringField(entry, "fow"),
+			Over:            stringField(entry, "over"),
+			FOWType:         stringField(entry, "fowType"),
+			Runs:            intField(entry, "runs"),
+			BallsFaced:      intField(entry, "ballsFaced"),
+			DismissalCard:   stringField(entry, "dismissalCard"),
+			ShortText:       stringField(entry, "shortText"),
+			DetailRef:       stringField(details, "$ref"),
+			DetailShortText: stringField(details, "shortText"),
+			DetailText:      stringField(details, "text"),
+			Extensions: extensionsFromMap(entry,
+				"number", "fow", "over", "fowType", "runs", "ballsFaced", "dismissalCard", "shortText", "details",
+			),
+		})
+	}
+
+	return wickets
 }
 
 // NormalizeDeliveryEvent maps a detail payload into the normalized delivery-event shape.
@@ -643,11 +769,14 @@ func NormalizePartnerships(data []byte) ([]Partnership, error) {
 		ref := stringField(item, "$ref")
 		ids := refIDs(ref)
 		partnerships = append(partnerships, Partnership{
-			Ref:       ref,
-			ID:        ids["partnershipId"],
-			InningsID: ids["inningsId"],
-			Period:    ids["periodId"],
-			Order:     parseInt(ids["partnershipId"]),
+			Ref:          ref,
+			ID:           ids["partnershipId"],
+			TeamID:       ids["competitorId"],
+			MatchID:      ids["competitionId"],
+			InningsID:    ids["inningsId"],
+			Period:       ids["periodId"],
+			Order:        parseInt(ids["partnershipId"]),
+			WicketNumber: parseInt(ids["partnershipId"]),
 			Extensions: extensionsFromMap(item,
 				"$ref",
 			),
@@ -655,6 +784,64 @@ func NormalizePartnerships(data []byte) ([]Partnership, error) {
 	}
 
 	return partnerships, nil
+}
+
+// NormalizePartnership maps a single partnership payload into a detailed normalized object.
+func NormalizePartnership(data []byte) (*Partnership, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	ref := stringField(payload, "$ref")
+	ids := refIDs(ref)
+	start := mapField(payload, "start")
+	end := mapField(payload, "end")
+
+	batsmen := make([]PartnershipBatsman, 0)
+	for _, batsman := range mapSliceField(payload, "batsmen") {
+		athleteRef := strings.TrimSpace(stringField(batsman, "athlete"))
+		if athleteRef == "" {
+			athleteRef = refFromField(batsman, "athlete")
+		}
+		batsmen = append(batsmen, PartnershipBatsman{
+			AthleteRef: athleteRef,
+			Balls:      intField(batsman, "balls"),
+			Runs:       intField(batsman, "runs"),
+		})
+	}
+
+	partnership := &Partnership{
+		Ref:          ref,
+		ID:           ids["partnershipId"],
+		TeamID:       ids["competitorId"],
+		MatchID:      ids["competitionId"],
+		InningsID:    ids["inningsId"],
+		Period:       ids["periodId"],
+		Order:        parseInt(ids["partnershipId"]),
+		WicketNumber: intField(payload, "wicketNumber"),
+		WicketName:   stringField(payload, "wicketName"),
+		FOWType:      stringField(payload, "fowType"),
+		Overs:        floatField(payload, "overs"),
+		Runs:         intField(payload, "runs"),
+		RunRate:      floatField(payload, "runRate"),
+		Start: PartnershipSnapshot{
+			Overs:   floatField(start, "overs"),
+			Runs:    intField(start, "runs"),
+			Wickets: intField(start, "wickets"),
+		},
+		End: PartnershipSnapshot{
+			Overs:   floatField(end, "overs"),
+			Runs:    intField(end, "runs"),
+			Wickets: intField(end, "wickets"),
+		},
+		Batsmen: batsmen,
+		Extensions: extensionsFromMap(payload,
+			"$ref", "wicketNumber", "wicketName", "fowType", "overs", "runs", "runRate", "start", "end", "batsmen",
+		),
+	}
+
+	return partnership, nil
 }
 
 // NormalizeFallOfWickets maps a fall-of-wicket page into normalized entries.
@@ -672,7 +859,10 @@ func NormalizeFallOfWickets(data []byte) ([]FallOfWicket, error) {
 		wickets = append(wickets, FallOfWicket{
 			Ref:          ref,
 			ID:           ids["fowId"],
+			MatchID:      ids["competitionId"],
+			TeamID:       ids["competitorId"],
 			InningsID:    ids["inningsId"],
+			Period:       ids["periodId"],
 			WicketNumber: parseInt(ids["fowId"]),
 			Extensions: extensionsFromMap(item,
 				"$ref",
@@ -681,6 +871,42 @@ func NormalizeFallOfWickets(data []byte) ([]FallOfWicket, error) {
 	}
 
 	return wickets, nil
+}
+
+// NormalizeFallOfWicket maps a single fall-of-wicket payload into a detailed normalized object.
+func NormalizeFallOfWicket(data []byte) (*FallOfWicket, error) {
+	payload, err := decodePayloadMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	ref := stringField(payload, "$ref")
+	ids := refIDs(ref)
+
+	fow := &FallOfWicket{
+		Ref:          ref,
+		ID:           ids["fowId"],
+		MatchID:      ids["competitionId"],
+		TeamID:       ids["competitorId"],
+		InningsID:    ids["inningsId"],
+		Period:       ids["periodId"],
+		WicketNumber: intField(payload, "wicketNumber"),
+		WicketOver:   floatField(payload, "wicketOver"),
+		FOWType:      stringField(payload, "fowType"),
+		Runs:         intField(payload, "runs"),
+		RunsScored:   intField(payload, "runsScored"),
+		BallsFaced:   intField(payload, "ballsFaced"),
+		AthleteRef:   refFromField(payload, "athlete"),
+		Extensions: extensionsFromMap(payload,
+			"$ref", "wicketNumber", "wicketOver", "fowType", "runs", "runsScored", "ballsFaced", "athlete",
+		),
+	}
+
+	if fow.WicketNumber == 0 {
+		fow.WicketNumber = parseInt(ids["fowId"])
+	}
+
+	return fow, nil
 }
 
 func normalizeStandingsEntries(item map[string]any) []Team {
@@ -1069,6 +1295,50 @@ func boolField(payload map[string]any, key string) bool {
 		return typed
 	case string:
 		parsed, err := strconv.ParseBool(strings.TrimSpace(typed))
+		if err != nil {
+			return false
+		}
+		return parsed
+	default:
+		return false
+	}
+}
+
+func truthyField(payload map[string]any, key string) bool {
+	if boolField(payload, key) {
+		return true
+	}
+	if payload == nil {
+		return false
+	}
+	value, ok := payload[key]
+	if !ok || value == nil {
+		return false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed != 0
+	case float32:
+		return typed != 0
+	case int:
+		return typed != 0
+	case int64:
+		return typed != 0
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err != nil {
+			return false
+		}
+		return parsed != 0
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return false
+		}
+		if parsed, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+			return parsed != 0
+		}
+		parsed, err := strconv.ParseBool(trimmed)
 		if err != nil {
 			return false
 		}

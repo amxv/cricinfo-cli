@@ -107,6 +107,58 @@ func TestCuratedFixturesDecodeContracts(t *testing.T) {
 	}
 }
 
+func TestPhase9FixtureNormalizationForWicketSplitsAndPartnershipPayloads(t *testing.T) {
+	t.Parallel()
+
+	statsBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "team-competitor", "statistics-789643.json"))
+	if err != nil {
+		t.Fatalf("read statistics fixture error: %v", err)
+	}
+	overs, wickets, err := NormalizeInningsPeriodStatistics(statsBody)
+	if err != nil {
+		t.Fatalf("NormalizeInningsPeriodStatistics fixture error: %v", err)
+	}
+	if len(overs) == 0 {
+		t.Fatalf("expected over timeline entries from period statistics fixture")
+	}
+	if len(wickets) == 0 {
+		t.Fatalf("expected wicket timeline entries from period statistics fixture")
+	}
+	if wickets[0].DetailRef == "" {
+		t.Fatalf("expected wicket timeline detail ref from statistics fixture")
+	}
+
+	partnershipBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "innings-fow-partnerships", "partnership-1.json"))
+	if err != nil {
+		t.Fatalf("read partnership fixture error: %v", err)
+	}
+	partnership, err := NormalizePartnership(partnershipBody)
+	if err != nil {
+		t.Fatalf("NormalizePartnership fixture error: %v", err)
+	}
+	if partnership.WicketNumber == 0 || partnership.Runs == 0 {
+		t.Fatalf("expected detailed partnership fields, got %+v", partnership)
+	}
+	if len(partnership.Batsmen) == 0 {
+		t.Fatalf("expected partnership batsmen payload")
+	}
+
+	fowBody, err := os.ReadFile(filepath.Join("testdata", "fixtures", "innings-fow-partnerships", "fow-1.json"))
+	if err != nil {
+		t.Fatalf("read fow fixture error: %v", err)
+	}
+	fow, err := NormalizeFallOfWicket(fowBody)
+	if err != nil {
+		t.Fatalf("NormalizeFallOfWicket fixture error: %v", err)
+	}
+	if fow.WicketNumber == 0 || fow.WicketOver == 0 {
+		t.Fatalf("expected detailed fow fields, got %+v", fow)
+	}
+	if fow.AthleteRef == "" {
+		t.Fatalf("expected fow athlete ref in detailed payload")
+	}
+}
+
 func assertFixtureFamilyKeys(t *testing.T, family FixtureFamily, name string) {
 	t.Helper()
 

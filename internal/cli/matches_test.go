@@ -19,6 +19,19 @@ type fakeMatchService struct {
 	detailsResult   cricinfo.NormalizedResult
 	playsResult     cricinfo.NormalizedResult
 	situationResult cricinfo.NormalizedResult
+	inningsResult   cricinfo.NormalizedResult
+	partnerships    cricinfo.NormalizedResult
+	fowResult       cricinfo.NormalizedResult
+	deliveries      cricinfo.NormalizedResult
+
+	inningsQueries      []string
+	inningsOpts         []cricinfo.MatchInningsOptions
+	partnershipsQueries []string
+	partnershipsOpts    []cricinfo.MatchInningsOptions
+	fowQueries          []string
+	fowOpts             []cricinfo.MatchInningsOptions
+	deliveriesQueries   []string
+	deliveriesOpts      []cricinfo.MatchInningsOptions
 }
 
 func (f *fakeMatchService) Close() error { return nil }
@@ -53,6 +66,30 @@ func (f *fakeMatchService) Plays(context.Context, string, cricinfo.MatchLookupOp
 
 func (f *fakeMatchService) Situation(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
 	return f.situationResult, nil
+}
+
+func (f *fakeMatchService) Innings(_ context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error) {
+	f.inningsQueries = append(f.inningsQueries, query)
+	f.inningsOpts = append(f.inningsOpts, opts)
+	return f.inningsResult, nil
+}
+
+func (f *fakeMatchService) Partnerships(_ context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error) {
+	f.partnershipsQueries = append(f.partnershipsQueries, query)
+	f.partnershipsOpts = append(f.partnershipsOpts, opts)
+	return f.partnerships, nil
+}
+
+func (f *fakeMatchService) FallOfWicket(_ context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error) {
+	f.fowQueries = append(f.fowQueries, query)
+	f.fowOpts = append(f.fowOpts, opts)
+	return f.fowResult, nil
+}
+
+func (f *fakeMatchService) Deliveries(_ context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error) {
+	f.deliveriesQueries = append(f.deliveriesQueries, query)
+	f.deliveriesOpts = append(f.deliveriesOpts, opts)
+	return f.deliveries, nil
 }
 
 func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
@@ -113,6 +150,37 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 		detailsResult:   cricinfo.NewListResult(cricinfo.EntityDeliveryEvent, []any{delivery}),
 		playsResult:     cricinfo.NewListResult(cricinfo.EntityDeliveryEvent, []any{delivery}),
 		situationResult: cricinfo.NewDataResult(cricinfo.EntityMatchSituation, situation),
+		inningsResult: cricinfo.NewListResult(cricinfo.EntityInnings, []any{
+			cricinfo.Innings{
+				TeamName:      "BOOST",
+				InningsNumber: 1,
+				Period:        3,
+				Score:         "69/2 (19 ov)",
+				OverTimeline: []cricinfo.InningsOver{
+					{Number: 12, Runs: 10, WicketCount: 1},
+				},
+				WicketTimeline: []cricinfo.InningsWicket{
+					{Number: 1, FOW: "60/1", Over: "11.2", DetailRef: "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details/52545007"},
+				},
+			},
+		}),
+		partnerships: cricinfo.NewListResult(cricinfo.EntityPartnership, []any{
+			cricinfo.Partnership{WicketName: "1st", Runs: 60, Overs: 11.2, InningsID: "1", Period: "1"},
+		}),
+		fowResult: cricinfo.NewListResult(cricinfo.EntityFallOfWicket, []any{
+			cricinfo.FallOfWicket{WicketNumber: 1, Runs: 60, WicketOver: 11.2, InningsID: "1", Period: "1"},
+		}),
+		deliveries: cricinfo.NewDataResult(cricinfo.EntityInnings, cricinfo.Innings{
+			TeamName:      "BOOST",
+			InningsNumber: 1,
+			Period:        1,
+			OverTimeline: []cricinfo.InningsOver{
+				{Number: 12, Runs: 10, WicketCount: 1},
+			},
+			WicketTimeline: []cricinfo.InningsWicket{
+				{Number: 1, FOW: "60/1", Over: "11.2", DetailRef: "http://core.espnuk.org/v2/sports/cricket/leagues/19138/events/1529474/competitions/1529474/details/52545007"},
+			},
+		}),
 	}
 
 	originalFactory := newMatchService
@@ -229,6 +297,48 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	if situationPayload["kind"] != string(cricinfo.EntityMatchSituation) {
 		t.Fatalf("expected kind %q in situation output, got %#v", cricinfo.EntityMatchSituation, situationPayload["kind"])
 	}
+
+	var inningsOut bytes.Buffer
+	var inningsErr bytes.Buffer
+	if err := Run([]string{"matches", "innings", "1529474", "--team", "BOOST", "--format", "text"}, &inningsOut, &inningsErr); err != nil {
+		t.Fatalf("Run matches innings --format text error: %v", err)
+	}
+	inningsText := inningsOut.String()
+	if !strings.Contains(strings.ToLower(inningsText), "innings 1/3") {
+		t.Fatalf("expected innings heading in text output, got %q", inningsText)
+	}
+
+	var partnershipsOut bytes.Buffer
+	var partnershipsErr bytes.Buffer
+	if err := Run([]string{"matches", "partnerships", "1529474", "--team", "BOOST", "--innings", "1", "--period", "1", "--format", "json"}, &partnershipsOut, &partnershipsErr); err != nil {
+		t.Fatalf("Run matches partnerships --format json error: %v", err)
+	}
+	var partnershipsPayload map[string]any
+	if err := json.Unmarshal(partnershipsOut.Bytes(), &partnershipsPayload); err != nil {
+		t.Fatalf("decode partnerships JSON output: %v", err)
+	}
+	if partnershipsPayload["kind"] != string(cricinfo.EntityPartnership) {
+		t.Fatalf("expected kind %q in partnerships output, got %#v", cricinfo.EntityPartnership, partnershipsPayload["kind"])
+	}
+
+	var fowOut bytes.Buffer
+	var fowErr bytes.Buffer
+	if err := Run([]string{"matches", "fow", "1529474", "--team", "BOOST", "--innings", "1", "--period", "1", "--format", "text"}, &fowOut, &fowErr); err != nil {
+		t.Fatalf("Run matches fow --format text error: %v", err)
+	}
+	if !strings.Contains(fowOut.String(), "Wicket 1") && !strings.Contains(fowOut.String(), "wicket 1") {
+		t.Fatalf("expected wicket summary in fow output, got %q", fowOut.String())
+	}
+
+	var deliveriesOut bytes.Buffer
+	var deliveriesErr bytes.Buffer
+	if err := Run([]string{"matches", "deliveries", "1529474", "--team", "BOOST", "--innings", "1", "--period", "1", "--format", "text"}, &deliveriesOut, &deliveriesErr); err != nil {
+		t.Fatalf("Run matches deliveries --format text error: %v", err)
+	}
+	deliveriesText := deliveriesOut.String()
+	if !strings.Contains(deliveriesText, "Over Timeline") || !strings.Contains(deliveriesText, "Wicket Timeline") {
+		t.Fatalf("expected deliveries timeline sections in text output, got %q", deliveriesText)
+	}
 }
 
 func TestMatchesHelpIncludesDrillDownHints(t *testing.T) {
@@ -245,5 +355,59 @@ func TestMatchesHelpIncludesDrillDownHints(t *testing.T) {
 	}
 	if !strings.Contains(help, "matches innings") {
 		t.Fatalf("expected innings drill-down hint in help output, got %q", help)
+	}
+}
+
+func TestMatchesInningsDepthSelectorsAndRequiredFlags(t *testing.T) {
+	service := &fakeMatchService{
+		inningsResult: cricinfo.NewListResult(cricinfo.EntityInnings, []any{
+			cricinfo.Innings{InningsNumber: 1, Period: 2, TeamName: "BOOST"},
+		}),
+		partnerships: cricinfo.NewListResult(cricinfo.EntityPartnership, []any{
+			cricinfo.Partnership{InningsID: "1", Period: "2", Runs: 32, Overs: 5.5},
+		}),
+		fowResult: cricinfo.NewListResult(cricinfo.EntityFallOfWicket, []any{
+			cricinfo.FallOfWicket{InningsID: "1", Period: "2", WicketNumber: 1},
+		}),
+		deliveries: cricinfo.NewDataResult(cricinfo.EntityInnings, cricinfo.Innings{InningsNumber: 1, Period: 2}),
+	}
+
+	originalFactory := newMatchService
+	newMatchService = func() (matchCommandService, error) { return service, nil }
+	defer func() {
+		newMatchService = originalFactory
+	}()
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	if err := Run([]string{"matches", "partnerships", "1529474", "--team", "Boost Region", "--innings", "1", "--period", "2", "--format", "json"}, &out, &errBuf); err != nil {
+		t.Fatalf("Run matches partnerships with selectors error: %v", err)
+	}
+	if len(service.partnershipsOpts) != 1 {
+		t.Fatalf("expected partnerships opts capture, got %d", len(service.partnershipsOpts))
+	}
+	if service.partnershipsOpts[0].TeamQuery != "Boost Region" || service.partnershipsOpts[0].Innings != 1 || service.partnershipsOpts[0].Period != 2 {
+		t.Fatalf("unexpected partnerships options: %+v", service.partnershipsOpts[0])
+	}
+
+	var missingPeriodOut bytes.Buffer
+	var missingPeriodErr bytes.Buffer
+	err := Run([]string{"matches", "partnerships", "1529474", "--team", "Boost Region", "--innings", "1"}, &missingPeriodOut, &missingPeriodErr)
+	if err == nil || !strings.Contains(err.Error(), "--period is required") {
+		t.Fatalf("expected --period required error, got %v", err)
+	}
+
+	var missingTeamOut bytes.Buffer
+	var missingTeamErr bytes.Buffer
+	err = Run([]string{"matches", "fow", "1529474", "--innings", "1", "--period", "2"}, &missingTeamOut, &missingTeamErr)
+	if err == nil || !strings.Contains(err.Error(), "--team is required") {
+		t.Fatalf("expected --team required error, got %v", err)
+	}
+
+	var missingInningsOut bytes.Buffer
+	var missingInningsErr bytes.Buffer
+	err = Run([]string{"matches", "deliveries", "1529474", "--team", "Boost Region", "--period", "2"}, &missingInningsOut, &missingInningsErr)
+	if err == nil || !strings.Contains(err.Error(), "--innings is required") {
+		t.Fatalf("expected --innings required error, got %v", err)
 	}
 }

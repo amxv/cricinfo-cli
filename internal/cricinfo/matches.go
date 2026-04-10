@@ -24,6 +24,14 @@ type MatchLookupOptions struct {
 	LeagueID string
 }
 
+// MatchInningsOptions controls innings-depth lookup behavior.
+type MatchInningsOptions struct {
+	LeagueID  string
+	TeamQuery string
+	Innings   int
+	Period    int
+}
+
 // MatchService implements domain-level match discovery and lookup commands.
 type MatchService struct {
 	client       *Client
@@ -206,6 +214,193 @@ func (s *MatchService) Situation(ctx context.Context, query string, opts MatchLo
 	result := NewDataResult(EntityMatchSituation, situation)
 	if len(lookup.warnings) > 0 {
 		result = NewPartialResult(EntityMatchSituation, situation, lookup.warnings...)
+	}
+	result.RequestedRef = resolved.RequestedRef
+	result.CanonicalRef = resolved.CanonicalRef
+	return result, nil
+}
+
+// Innings resolves and returns innings summaries with over and wicket timelines when period statistics are available.
+func (s *MatchService) Innings(ctx context.Context, query string, opts MatchInningsOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, MatchLookupOptions{LeagueID: opts.LeagueID})
+	if passthrough != nil {
+		passthrough.Kind = EntityInnings
+		return *passthrough, nil
+	}
+
+	teams, teamWarnings, teamResult := s.selectTeamsFromMatch(ctx, *lookup.match, opts.TeamQuery, opts.LeagueID)
+	if teamResult != nil {
+		teamResult.Kind = EntityInnings
+		return *teamResult, nil
+	}
+
+	warnings := append([]string{}, lookup.warnings...)
+	warnings = append(warnings, teamWarnings...)
+
+	items := make([]any, 0)
+	for _, team := range teams {
+		innings, resolvedRef, inningsWarnings := s.fetchTeamInnings(ctx, *lookup.match, team)
+		warnings = append(warnings, inningsWarnings...)
+		for i := range innings {
+			if strings.TrimSpace(team.ID) != "" {
+				innings[i].TeamID = strings.TrimSpace(team.ID)
+			}
+			innings[i].TeamName = nonEmpty(team.ShortName, team.Name, team.ID, innings[i].TeamName)
+			innings[i].MatchID = nonEmpty(innings[i].MatchID, lookup.match.ID)
+			innings[i].CompetitionID = nonEmpty(innings[i].CompetitionID, lookup.match.CompetitionID, lookup.match.ID)
+			innings[i].EventID = nonEmpty(innings[i].EventID, lookup.match.EventID)
+			innings[i].LeagueID = nonEmpty(innings[i].LeagueID, lookup.match.LeagueID)
+
+			statsWarnings := s.hydrateInningsTimelines(ctx, &innings[i])
+			warnings = append(warnings, statsWarnings...)
+			items = append(items, innings[i])
+		}
+		if strings.TrimSpace(resolvedRef) != "" && len(items) == 0 {
+			warnings = append(warnings, fmt.Sprintf("no innings found at %s", resolvedRef))
+		}
+	}
+
+	result := NewListResult(EntityInnings, items)
+	if len(warnings) > 0 {
+		result = NewPartialListResult(EntityInnings, items, warnings...)
+	}
+	result.RequestedRef = lookup.resolved.RequestedRef
+	result.CanonicalRef = lookup.resolved.CanonicalRef
+	if len(items) == 0 && strings.TrimSpace(result.Message) == "" {
+		result.Message = "no innings available for selected scope"
+	}
+	return result, nil
+}
+
+// Partnerships resolves detailed partnership objects for a selected team/innings/period.
+func (s *MatchService) Partnerships(ctx context.Context, query string, opts MatchInningsOptions) (NormalizedResult, error) {
+	selected, passthrough := s.resolveSelectedInnings(ctx, query, opts, true)
+	if passthrough != nil {
+		passthrough.Kind = EntityPartnership
+		return *passthrough, nil
+	}
+	if strings.TrimSpace(selected.innings.PartnershipsRef) == "" {
+		return NormalizedResult{
+			Kind:    EntityPartnership,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("partnership route unavailable for team %q innings %d/%d", selected.team.ID, selected.innings.InningsNumber, selected.innings.Period),
+		}, nil
+	}
+
+	resolved, items, warnings, err := s.fetchDetailedRefCollection(
+		ctx,
+		selected.innings.PartnershipsRef,
+		func(itemBody []byte) (any, error) {
+			partnership, normalizeErr := NormalizePartnership(itemBody)
+			if normalizeErr != nil {
+				return nil, normalizeErr
+			}
+			if strings.TrimSpace(selected.team.ID) != "" {
+				partnership.TeamID = strings.TrimSpace(selected.team.ID)
+			}
+			partnership.TeamName = nonEmpty(selected.team.ShortName, selected.team.Name, selected.team.ID, partnership.TeamName)
+			partnership.MatchID = nonEmpty(partnership.MatchID, selected.match.ID)
+			partnership.InningsID = nonEmpty(partnership.InningsID, fmt.Sprintf("%d", selected.innings.InningsNumber))
+			partnership.Period = nonEmpty(partnership.Period, fmt.Sprintf("%d", selected.innings.Period))
+			if partnership.Order == 0 {
+				partnership.Order = partnership.WicketNumber
+			}
+			return *partnership, nil
+		},
+	)
+	if err != nil {
+		return NewTransportErrorResult(EntityPartnership, selected.innings.PartnershipsRef, err), nil
+	}
+
+	warnings = append(selected.warnings, warnings...)
+	result := NewListResult(EntityPartnership, items)
+	if len(warnings) > 0 {
+		result = NewPartialListResult(EntityPartnership, items, warnings...)
+	}
+	result.RequestedRef = resolved.RequestedRef
+	result.CanonicalRef = resolved.CanonicalRef
+	return result, nil
+}
+
+// FallOfWicket resolves detailed fall-of-wicket objects for a selected team/innings/period.
+func (s *MatchService) FallOfWicket(ctx context.Context, query string, opts MatchInningsOptions) (NormalizedResult, error) {
+	selected, passthrough := s.resolveSelectedInnings(ctx, query, opts, true)
+	if passthrough != nil {
+		passthrough.Kind = EntityFallOfWicket
+		return *passthrough, nil
+	}
+	if strings.TrimSpace(selected.innings.FallOfWicketRef) == "" {
+		return NormalizedResult{
+			Kind:    EntityFallOfWicket,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("fall-of-wicket route unavailable for team %q innings %d/%d", selected.team.ID, selected.innings.InningsNumber, selected.innings.Period),
+		}, nil
+	}
+
+	resolved, items, warnings, err := s.fetchDetailedRefCollection(
+		ctx,
+		selected.innings.FallOfWicketRef,
+		func(itemBody []byte) (any, error) {
+			fow, normalizeErr := NormalizeFallOfWicket(itemBody)
+			if normalizeErr != nil {
+				return nil, normalizeErr
+			}
+			if strings.TrimSpace(selected.team.ID) != "" {
+				fow.TeamID = strings.TrimSpace(selected.team.ID)
+			}
+			fow.TeamName = nonEmpty(selected.team.ShortName, selected.team.Name, selected.team.ID, fow.TeamName)
+			fow.MatchID = nonEmpty(fow.MatchID, selected.match.ID)
+			fow.InningsID = nonEmpty(fow.InningsID, fmt.Sprintf("%d", selected.innings.InningsNumber))
+			fow.Period = nonEmpty(fow.Period, fmt.Sprintf("%d", selected.innings.Period))
+			return *fow, nil
+		},
+	)
+	if err != nil {
+		return NewTransportErrorResult(EntityFallOfWicket, selected.innings.FallOfWicketRef, err), nil
+	}
+
+	warnings = append(selected.warnings, warnings...)
+	result := NewListResult(EntityFallOfWicket, items)
+	if len(warnings) > 0 {
+		result = NewPartialListResult(EntityFallOfWicket, items, warnings...)
+	}
+	result.RequestedRef = resolved.RequestedRef
+	result.CanonicalRef = resolved.CanonicalRef
+	return result, nil
+}
+
+// Deliveries resolves period statistics into over and wicket timelines for a selected team/innings/period.
+func (s *MatchService) Deliveries(ctx context.Context, query string, opts MatchInningsOptions) (NormalizedResult, error) {
+	selected, passthrough := s.resolveSelectedInnings(ctx, query, opts, true)
+	if passthrough != nil {
+		passthrough.Kind = EntityInnings
+		return *passthrough, nil
+	}
+	if strings.TrimSpace(selected.innings.StatisticsRef) == "" {
+		return NormalizedResult{
+			Kind:    EntityInnings,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("period statistics route unavailable for team %q innings %d/%d", selected.team.ID, selected.innings.InningsNumber, selected.innings.Period),
+		}, nil
+	}
+
+	resolved, err := s.client.ResolveRefChain(ctx, selected.innings.StatisticsRef)
+	if err != nil {
+		return NewTransportErrorResult(EntityInnings, selected.innings.StatisticsRef, err), nil
+	}
+
+	overs, wickets, err := NormalizeInningsPeriodStatistics(resolved.Body)
+	if err != nil {
+		return NormalizedResult{}, fmt.Errorf("normalize period statistics %q: %w", resolved.CanonicalRef, err)
+	}
+
+	innings := selected.innings
+	innings.OverTimeline = overs
+	innings.WicketTimeline = wickets
+
+	result := NewDataResult(EntityInnings, innings)
+	if len(selected.warnings) > 0 {
+		result = NewPartialResult(EntityInnings, innings, selected.warnings...)
 	}
 	result.RequestedRef = resolved.RequestedRef
 	result.CanonicalRef = resolved.CanonicalRef
@@ -410,6 +605,410 @@ func (s *MatchService) deliveryEventsFromRoute(ctx context.Context, ref string, 
 	result.RequestedRef = resolved.RequestedRef
 	result.CanonicalRef = resolved.CanonicalRef
 	return result, nil
+}
+
+type selectedInningsContext struct {
+	match    Match
+	team     Team
+	innings  Innings
+	warnings []string
+}
+
+func (s *MatchService) resolveSelectedInnings(
+	ctx context.Context,
+	query string,
+	opts MatchInningsOptions,
+	requireTeam bool,
+) (*selectedInningsContext, *NormalizedResult) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, MatchLookupOptions{LeagueID: opts.LeagueID})
+	if passthrough != nil {
+		return nil, passthrough
+	}
+
+	teamQuery := strings.TrimSpace(opts.TeamQuery)
+	if requireTeam && teamQuery == "" {
+		result := NormalizedResult{
+			Kind:    EntityInnings,
+			Status:  ResultStatusEmpty,
+			Message: "--team is required",
+		}
+		return nil, &result
+	}
+
+	teams, teamWarnings, teamResult := s.selectTeamsFromMatch(ctx, *lookup.match, teamQuery, opts.LeagueID)
+	if teamResult != nil {
+		return nil, teamResult
+	}
+	if len(teams) == 0 {
+		result := NormalizedResult{
+			Kind:    EntityInnings,
+			Status:  ResultStatusEmpty,
+			Message: "no teams available for match selection",
+		}
+		return nil, &result
+	}
+
+	team := teams[0]
+	inningsList, _, inningsWarnings := s.fetchTeamInnings(ctx, *lookup.match, team)
+	if len(inningsWarnings) > 0 {
+		teamWarnings = append(teamWarnings, inningsWarnings...)
+	}
+
+	if len(inningsList) == 0 {
+		result := NormalizedResult{
+			Kind:    EntityInnings,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("no innings found for team %q", team.ID),
+		}
+		return nil, &result
+	}
+
+	requestedInnings := opts.Innings
+	requestedPeriod := opts.Period
+	if requestedInnings <= 0 || requestedPeriod <= 0 {
+		result := NormalizedResult{
+			Kind:    EntityInnings,
+			Status:  ResultStatusEmpty,
+			Message: "--innings and --period are required",
+		}
+		return nil, &result
+	}
+
+	var selected *Innings
+	for i := range inningsList {
+		if inningsList[i].InningsNumber == requestedInnings && inningsList[i].Period == requestedPeriod {
+			candidate := inningsList[i]
+			if strings.TrimSpace(team.ID) != "" {
+				candidate.TeamID = strings.TrimSpace(team.ID)
+			}
+			candidate.TeamName = nonEmpty(team.ShortName, team.Name, team.ID, candidate.TeamName)
+			candidate.MatchID = nonEmpty(candidate.MatchID, lookup.match.ID)
+			candidate.CompetitionID = nonEmpty(candidate.CompetitionID, lookup.match.CompetitionID, lookup.match.ID)
+			candidate.EventID = nonEmpty(candidate.EventID, lookup.match.EventID)
+			candidate.LeagueID = nonEmpty(candidate.LeagueID, lookup.match.LeagueID)
+			selected = &candidate
+			break
+		}
+	}
+
+	if selected == nil {
+		result := NormalizedResult{
+			Kind:   EntityInnings,
+			Status: ResultStatusEmpty,
+			Message: fmt.Sprintf(
+				"requested innings/period %d/%d was not found; available: %s",
+				requestedInnings,
+				requestedPeriod,
+				availableInningsPeriods(inningsList),
+			),
+		}
+		return nil, &result
+	}
+
+	warnings := append([]string{}, lookup.warnings...)
+	warnings = append(warnings, teamWarnings...)
+	return &selectedInningsContext{
+		match:    *lookup.match,
+		team:     team,
+		innings:  *selected,
+		warnings: compactWarnings(warnings),
+	}, nil
+}
+
+func (s *MatchService) selectTeamsFromMatch(
+	ctx context.Context,
+	match Match,
+	teamQuery string,
+	leagueID string,
+) ([]Team, []string, *NormalizedResult) {
+	teamQuery = strings.TrimSpace(teamQuery)
+	if teamQuery == "" {
+		teams := make([]Team, 0, len(match.Teams))
+		for _, team := range match.Teams {
+			if strings.TrimSpace(team.ID) == "" {
+				continue
+			}
+			teams = append(teams, team)
+		}
+		if len(teams) == 0 {
+			result := NormalizedResult{
+				Kind:    EntityInnings,
+				Status:  ResultStatusEmpty,
+				Message: "no teams available in match competitors",
+			}
+			return nil, nil, &result
+		}
+		return teams, nil, nil
+	}
+
+	if direct := findTeamInMatch(match, teamQuery); direct != nil {
+		return []Team{*direct}, nil, nil
+	}
+
+	searchResult, err := s.resolver.Search(ctx, EntityTeam, teamQuery, ResolveOptions{
+		Limit:    5,
+		LeagueID: strings.TrimSpace(leagueID),
+		MatchID:  strings.TrimSpace(match.ID),
+	})
+	if err != nil {
+		result := NewTransportErrorResult(EntityTeam, teamQuery, err)
+		return nil, nil, &result
+	}
+
+	for _, entity := range searchResult.Entities {
+		if found := matchTeamByID(match, entity.ID); found != nil {
+			return []Team{*found}, searchResult.Warnings, nil
+		}
+	}
+
+	result := NormalizedResult{
+		Kind:    EntityTeam,
+		Status:  ResultStatusEmpty,
+		Message: fmt.Sprintf("team %q not found in match; available: %s", teamQuery, availableMatchTeams(match)),
+	}
+	return nil, searchResult.Warnings, &result
+}
+
+func (s *MatchService) fetchTeamInnings(ctx context.Context, match Match, team Team) ([]Innings, string, []string) {
+	candidates := compactWarnings([]string{
+		strings.TrimSpace(team.LinescoresRef),
+		strings.TrimSpace(competitorSubresourceRef(match, team.ID, "linescores")),
+	})
+	if len(candidates) == 0 {
+		return []Innings{}, "", []string{fmt.Sprintf("linescores route unavailable for team %q", team.ID)}
+	}
+
+	seen := map[string]struct{}{}
+	warnings := make([]string, 0)
+	for _, ref := range candidates {
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+
+		resolved, err := s.client.ResolveRefChain(ctx, ref)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("linescores %s: %v", ref, err))
+			continue
+		}
+
+		innings, collectWarnings, collectErr := s.collectInningsFromPayload(ctx, resolved.Body)
+		warnings = append(warnings, collectWarnings...)
+		if collectErr != nil {
+			warnings = append(warnings, fmt.Sprintf("linescores %s: %v", ref, collectErr))
+			continue
+		}
+
+		for i := range innings {
+			if strings.TrimSpace(team.ID) != "" {
+				innings[i].TeamID = strings.TrimSpace(team.ID)
+			}
+			innings[i].TeamName = nonEmpty(team.ShortName, team.Name, team.ID, innings[i].TeamName)
+			innings[i].MatchID = nonEmpty(innings[i].MatchID, match.ID)
+			innings[i].CompetitionID = nonEmpty(innings[i].CompetitionID, match.CompetitionID, match.ID)
+			innings[i].EventID = nonEmpty(innings[i].EventID, match.EventID)
+			innings[i].LeagueID = nonEmpty(innings[i].LeagueID, match.LeagueID)
+			if scopedRef := inningsSubresourceRef(match, team.ID, innings[i].InningsNumber, innings[i].Period, "statistics/0"); scopedRef != "" {
+				innings[i].StatisticsRef = scopedRef
+			}
+			if scopedRef := inningsSubresourceRef(match, team.ID, innings[i].InningsNumber, innings[i].Period, "partnerships"); scopedRef != "" {
+				innings[i].PartnershipsRef = scopedRef
+			}
+			if scopedRef := inningsSubresourceRef(match, team.ID, innings[i].InningsNumber, innings[i].Period, "fow"); scopedRef != "" {
+				innings[i].FallOfWicketRef = scopedRef
+			}
+		}
+
+		if len(innings) > 0 {
+			return innings, resolved.CanonicalRef, compactWarnings(warnings)
+		}
+	}
+
+	return []Innings{}, "", compactWarnings(warnings)
+}
+
+func (s *MatchService) collectInningsFromPayload(ctx context.Context, body []byte) ([]Innings, []string, error) {
+	payload, err := decodePayloadMap(body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	warnings := make([]string, 0)
+	innings := make([]Innings, 0)
+
+	appendInningsMap := func(item map[string]any) {
+		if item == nil {
+			return
+		}
+		if stringField(item, "$ref") == "" && intField(item, "period") == 0 && intField(item, "runs") == 0 && intField(item, "wickets") == 0 && stringField(item, "score") == "" {
+			return
+		}
+		innings = append(innings, *normalizeInningsFromMap(item))
+	}
+
+	items := mapSliceField(payload, "items")
+	if len(items) > 0 {
+		for _, item := range items {
+			itemRef := strings.TrimSpace(stringField(item, "$ref"))
+			if itemRef != "" && intField(item, "period") == 0 && stringField(item, "score") == "" && intField(item, "runs") == 0 && intField(item, "wickets") == 0 {
+				resolved, itemErr := s.client.ResolveRefChain(ctx, itemRef)
+				if itemErr != nil {
+					warnings = append(warnings, fmt.Sprintf("innings %s: %v", itemRef, itemErr))
+					continue
+				}
+				normalized, normalizeErr := NormalizeInnings(resolved.Body)
+				if normalizeErr != nil {
+					warnings = append(warnings, fmt.Sprintf("innings %s: %v", itemRef, normalizeErr))
+					continue
+				}
+				innings = append(innings, *normalized)
+				continue
+			}
+			appendInningsMap(item)
+		}
+		return innings, compactWarnings(warnings), nil
+	}
+
+	appendInningsMap(payload)
+	return innings, compactWarnings(warnings), nil
+}
+
+func (s *MatchService) hydrateInningsTimelines(ctx context.Context, innings *Innings) []string {
+	if innings == nil || strings.TrimSpace(innings.StatisticsRef) == "" {
+		return nil
+	}
+
+	resolved, err := s.client.ResolveRefChain(ctx, innings.StatisticsRef)
+	if err != nil {
+		return []string{fmt.Sprintf("period statistics %s: %v", innings.StatisticsRef, err)}
+	}
+
+	overs, wickets, err := NormalizeInningsPeriodStatistics(resolved.Body)
+	if err != nil {
+		return []string{fmt.Sprintf("period statistics %s: %v", resolved.CanonicalRef, err)}
+	}
+	innings.OverTimeline = overs
+	innings.WicketTimeline = wickets
+	return nil
+}
+
+func (s *MatchService) fetchDetailedRefCollection(
+	ctx context.Context,
+	ref string,
+	normalize func(itemBody []byte) (any, error),
+) (*ResolvedDocument, []any, []string, error) {
+	resolved, err := s.client.ResolveRefChain(ctx, ref)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	page, err := DecodePage[Ref](resolved.Body)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("decode page %q: %w", resolved.CanonicalRef, err)
+	}
+
+	items := make([]any, 0, len(page.Items))
+	warnings := make([]string, 0)
+	for _, item := range page.Items {
+		itemRef := strings.TrimSpace(item.URL)
+		if itemRef == "" {
+			warnings = append(warnings, "skip item with empty ref")
+			continue
+		}
+
+		itemResolved, itemErr := s.client.ResolveRefChain(ctx, itemRef)
+		if itemErr != nil {
+			warnings = append(warnings, fmt.Sprintf("item %s: %v", itemRef, itemErr))
+			continue
+		}
+
+		normalized, normalizeErr := normalize(itemResolved.Body)
+		if normalizeErr != nil {
+			warnings = append(warnings, fmt.Sprintf("item %s: %v", itemRef, normalizeErr))
+			continue
+		}
+		items = append(items, normalized)
+	}
+
+	return resolved, items, compactWarnings(warnings), nil
+}
+
+func availableInningsPeriods(innings []Innings) string {
+	if len(innings) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(innings))
+	seen := map[string]struct{}{}
+	for _, item := range innings {
+		if item.InningsNumber == 0 || item.Period == 0 {
+			continue
+		}
+		label := fmt.Sprintf("%d/%d", item.InningsNumber, item.Period)
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		parts = append(parts, label)
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func findTeamInMatch(match Match, query string) *Team {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return nil
+	}
+
+	for i := range match.Teams {
+		candidate := &match.Teams[i]
+		values := []string{
+			strings.TrimSpace(candidate.ID),
+			strings.TrimSpace(candidate.Name),
+			strings.TrimSpace(candidate.ShortName),
+			strings.TrimSpace(candidate.Abbreviation),
+			strings.TrimSpace(refIDs(candidate.Ref)["teamId"]),
+			strings.TrimSpace(refIDs(candidate.Ref)["competitorId"]),
+		}
+		for _, value := range values {
+			if strings.ToLower(strings.TrimSpace(value)) == query {
+				return candidate
+			}
+		}
+	}
+
+	return nil
+}
+
+func availableMatchTeams(match Match) string {
+	parts := make([]string, 0, len(match.Teams))
+	for _, team := range match.Teams {
+		name := nonEmpty(team.ShortName, team.Name, team.ID)
+		if name == "" {
+			continue
+		}
+		parts = append(parts, name)
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func inningsSubresourceRef(match Match, teamID string, innings, period int, suffix string) string {
+	base := competitorSubresourceRef(match, teamID, "")
+	if base == "" || innings <= 0 || period <= 0 {
+		return ""
+	}
+
+	suffix = strings.Trim(strings.TrimSpace(suffix), "/")
+	ref := fmt.Sprintf("%s/linescores/%d/%d", strings.TrimRight(base, "/"), innings, period)
+	if suffix != "" {
+		ref += "/" + suffix
+	}
+	return ref
 }
 
 func (s *MatchService) matchesFromEventRef(

@@ -139,3 +139,65 @@ func TestLiveMatchDrillDownRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveMatchInningsDepthRoutes(t *testing.T) {
+	t.Parallel()
+	requireLiveMatrix(t)
+
+	client, err := NewClient(Config{
+		Timeout:    12 * time.Second,
+		MaxRetries: 3,
+	})
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	routes := []struct {
+		name string
+		ref  string
+		keys []string
+	}{
+		{
+			name: "linescores",
+			ref:  "/leagues/19138/events/1529474/competitions/1529474/competitors/789643/linescores",
+			keys: []string{"items", "count"},
+		},
+		{
+			name: "period-statistics",
+			ref:  "/leagues/19138/events/1529474/competitions/1529474/competitors/789643/linescores/1/1/statistics/0",
+			keys: []string{"splits", "team"},
+		},
+		{
+			name: "partnerships",
+			ref:  "/leagues/19138/events/1529474/competitions/1529474/competitors/789643/linescores/1/1/partnerships",
+			keys: []string{"items", "count"},
+		},
+		{
+			name: "fow",
+			ref:  "/leagues/19138/events/1529474/competitions/1529474/competitors/789643/linescores/1/1/fow",
+			keys: []string{"items", "count"},
+		},
+	}
+
+	for _, tc := range routes {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			resolved, err := client.ResolveRefChain(ctx, tc.ref)
+			if err != nil {
+				if isLive503(err) {
+					t.Skipf("skipping %s after transient 503: %v", tc.name, err)
+				}
+				t.Fatalf("ResolveRefChain(%q) error: %v", tc.ref, err)
+			}
+
+			var payload map[string]any
+			if err := json.Unmarshal(resolved.Body, &payload); err != nil {
+				t.Fatalf("unmarshal %s payload: %v", tc.name, err)
+			}
+			requireAnyKey(t, payload, tc.keys...)
+		})
+	}
+}

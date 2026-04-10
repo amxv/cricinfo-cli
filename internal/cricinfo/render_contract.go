@@ -329,19 +329,60 @@ type StandingsGroup struct {
 
 // Innings is the normalized innings shape.
 type Innings struct {
-	Ref             string         `json:"ref,omitempty"`
-	ID              string         `json:"id,omitempty"`
-	Period          int            `json:"period,omitempty"`
+	Ref             string          `json:"ref,omitempty"`
+	ID              string          `json:"id,omitempty"`
+	LeagueID        string          `json:"leagueId,omitempty"`
+	EventID         string          `json:"eventId,omitempty"`
+	CompetitionID   string          `json:"competitionId,omitempty"`
+	MatchID         string          `json:"matchId,omitempty"`
+	TeamID          string          `json:"teamId,omitempty"`
+	TeamName        string          `json:"teamName,omitempty"`
+	InningsNumber   int             `json:"inningsNumber,omitempty"`
+	Period          int             `json:"period,omitempty"`
+	Runs            int             `json:"runs,omitempty"`
+	Wickets         int             `json:"wickets,omitempty"`
+	Overs           float64         `json:"overs,omitempty"`
+	Score           string          `json:"score,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	Target          int             `json:"target,omitempty"`
+	IsBatting       bool            `json:"isBatting"`
+	IsCurrent       bool            `json:"isCurrent"`
+	Fours           int             `json:"fours,omitempty"`
+	Sixes           int             `json:"sixes,omitempty"`
+	StatisticsRef   string          `json:"statisticsRef,omitempty"`
+	LeadersRef      string          `json:"leadersRef,omitempty"`
+	PartnershipsRef string          `json:"partnershipsRef,omitempty"`
+	FallOfWicketRef string          `json:"fallOfWicketRef,omitempty"`
+	OverTimeline    []InningsOver   `json:"overTimeline,omitempty"`
+	WicketTimeline  []InningsWicket `json:"wicketTimeline,omitempty"`
+	Extensions      map[string]any  `json:"extensions,omitempty"`
+}
+
+// InningsOver is one over summary in an innings timeline.
+type InningsOver struct {
+	Number      int             `json:"number,omitempty"`
+	Runs        int             `json:"runs,omitempty"`
+	WicketCount int             `json:"wicketCount,omitempty"`
+	Wickets     []InningsWicket `json:"wickets,omitempty"`
+	Extensions  map[string]any  `json:"extensions,omitempty"`
+}
+
+// InningsWicket is a normalized wicket event from period statistics or FOW resources.
+type InningsWicket struct {
+	Number          int            `json:"number,omitempty"`
+	FOW             string         `json:"fow,omitempty"`
+	Over            string         `json:"over,omitempty"`
+	WicketOver      float64        `json:"wicketOver,omitempty"`
+	FOWType         string         `json:"fowType,omitempty"`
 	Runs            int            `json:"runs,omitempty"`
-	Wickets         int            `json:"wickets,omitempty"`
-	Overs           float64        `json:"overs,omitempty"`
-	Score           string         `json:"score,omitempty"`
-	Description     string         `json:"description,omitempty"`
-	Target          int            `json:"target,omitempty"`
-	StatisticsRef   string         `json:"statisticsRef,omitempty"`
-	LeadersRef      string         `json:"leadersRef,omitempty"`
-	PartnershipsRef string         `json:"partnershipsRef,omitempty"`
-	FallOfWicketRef string         `json:"fallOfWicketRef,omitempty"`
+	RunsScored      int            `json:"runsScored,omitempty"`
+	BallsFaced      int            `json:"ballsFaced,omitempty"`
+	DismissalCard   string         `json:"dismissalCard,omitempty"`
+	ShortText       string         `json:"shortText,omitempty"`
+	DetailRef       string         `json:"detailRef,omitempty"`
+	DetailShortText string         `json:"detailShortText,omitempty"`
+	DetailText      string         `json:"detailText,omitempty"`
+	AthleteRef      string         `json:"athleteRef,omitempty"`
 	Extensions      map[string]any `json:"extensions,omitempty"`
 }
 
@@ -400,20 +441,56 @@ type StatValue struct {
 
 // Partnership is the normalized partnership shape.
 type Partnership struct {
-	Ref        string         `json:"ref,omitempty"`
-	ID         string         `json:"id,omitempty"`
-	InningsID  string         `json:"inningsId,omitempty"`
-	Period     string         `json:"period,omitempty"`
-	Order      int            `json:"order,omitempty"`
-	Extensions map[string]any `json:"extensions,omitempty"`
+	Ref          string               `json:"ref,omitempty"`
+	ID           string               `json:"id,omitempty"`
+	MatchID      string               `json:"matchId,omitempty"`
+	TeamID       string               `json:"teamId,omitempty"`
+	TeamName     string               `json:"teamName,omitempty"`
+	InningsID    string               `json:"inningsId,omitempty"`
+	Period       string               `json:"period,omitempty"`
+	Order        int                  `json:"order,omitempty"`
+	WicketNumber int                  `json:"wicketNumber,omitempty"`
+	WicketName   string               `json:"wicketName,omitempty"`
+	FOWType      string               `json:"fowType,omitempty"`
+	Overs        float64              `json:"overs,omitempty"`
+	Runs         int                  `json:"runs,omitempty"`
+	RunRate      float64              `json:"runRate,omitempty"`
+	Start        PartnershipSnapshot  `json:"start,omitempty"`
+	End          PartnershipSnapshot  `json:"end,omitempty"`
+	Batsmen      []PartnershipBatsman `json:"batsmen,omitempty"`
+	Extensions   map[string]any       `json:"extensions,omitempty"`
+}
+
+// PartnershipSnapshot captures start/end score markers for a partnership.
+type PartnershipSnapshot struct {
+	Overs   float64 `json:"overs,omitempty"`
+	Runs    int     `json:"runs,omitempty"`
+	Wickets int     `json:"wickets,omitempty"`
+}
+
+// PartnershipBatsman captures an individual batter contribution in a partnership.
+type PartnershipBatsman struct {
+	AthleteRef string `json:"athleteRef,omitempty"`
+	Balls      int    `json:"balls,omitempty"`
+	Runs       int    `json:"runs,omitempty"`
 }
 
 // FallOfWicket is the normalized wicket-fall shape.
 type FallOfWicket struct {
 	Ref          string         `json:"ref,omitempty"`
 	ID           string         `json:"id,omitempty"`
+	MatchID      string         `json:"matchId,omitempty"`
+	TeamID       string         `json:"teamId,omitempty"`
+	TeamName     string         `json:"teamName,omitempty"`
 	InningsID    string         `json:"inningsId,omitempty"`
+	Period       string         `json:"period,omitempty"`
 	WicketNumber int            `json:"wicketNumber,omitempty"`
+	WicketOver   float64        `json:"wicketOver,omitempty"`
+	FOWType      string         `json:"fowType,omitempty"`
+	Runs         int            `json:"runs,omitempty"`
+	RunsScored   int            `json:"runsScored,omitempty"`
+	BallsFaced   int            `json:"ballsFaced,omitempty"`
+	AthleteRef   string         `json:"athleteRef,omitempty"`
 	Extensions   map[string]any `json:"extensions,omitempty"`
 }
 
