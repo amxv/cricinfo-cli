@@ -1191,7 +1191,7 @@ type battingTotals struct {
 }
 
 func extractBattingTotals(player PlayerMatch) battingTotals {
-	totals := battingTotals{strikeRate: player.Summary.StrikeRate, balls: player.Summary.BallsFaced}
+	totals := battingTotals{strikeRate: player.Summary.StrikeRate}
 	for _, category := range player.Batting {
 		for _, stat := range category.Stats {
 			switch normalizeStatName(stat.Name) {
@@ -1209,6 +1209,12 @@ func extractBattingTotals(player PlayerMatch) battingTotals {
 				}
 			}
 		}
+	}
+
+	// Batting summary fields are frequently derived from the same stats payload.
+	// Prefer the larger value rather than summing to avoid duplicate counting.
+	if player.Summary.BallsFaced > 0 {
+		totals.balls = analysisMaxInt(totals.balls, player.Summary.BallsFaced)
 	}
 	return totals
 }

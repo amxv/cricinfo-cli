@@ -203,6 +203,44 @@ func TestPhase15BowlingActivityFilterSkipsNonBowlers(t *testing.T) {
 	}
 }
 
+func TestPhase15ExtractBattingTotalsDoesNotDoubleCountSummaryBalls(t *testing.T) {
+	t.Parallel()
+
+	player := PlayerMatch{
+		PlayerID:   "1408688",
+		PlayerName: "Vaibhav Sooryavanshi",
+		Batting: []StatCategory{
+			{
+				Name: "general",
+				Stats: []StatValue{
+					{Name: "runs", Value: "78"},
+					{Name: "ballsFaced", Value: "26"},
+					{Name: "fours", Value: "8"},
+					{Name: "sixes", Value: "7"},
+					{Name: "strikeRate", Value: "300"},
+				},
+			},
+		},
+		Summary: PlayerMatchSummary{
+			BallsFaced: 26,
+			StrikeRate: 300,
+		},
+	}
+
+	totals := extractBattingTotals(player)
+	if totals.runs != 78 || totals.balls != 26 {
+		t.Fatalf("expected 78/26 batting totals, got runs=%d balls=%d", totals.runs, totals.balls)
+	}
+
+	agg := &analysisAggregate{
+		runsScored: totals.runs,
+		ballsFaced: totals.balls,
+	}
+	if got := strikeRateFromAggregate(agg); got != 300 {
+		t.Fatalf("expected strike rate 300, got %.2f", got)
+	}
+}
+
 func TestLivePhase15SmallHistoricalScope(t *testing.T) {
 	t.Parallel()
 	requireLiveMatrix(t)
