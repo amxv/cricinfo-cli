@@ -13,6 +13,10 @@ import (
 )
 
 const defaultMatchListLimit = 20
+const matchListEventFetchConcurrency = 3
+const matchListStatusFetchConcurrency = 3
+const matchListEventFetchTimeout = 4500 * time.Millisecond
+const matchListStatusFetchTimeout = 4 * time.Second
 const deliveryFetchConcurrency = 96
 const detailSubresourceFetchConcurrency = 24
 const detailItemFetchTimeout = 3 * time.Second
@@ -590,33 +594,46 @@ func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions
 		limit = defaultMatchListLimit
 	}
 
-	statusCache := map[string]matchStatusSnapshot{}
-
 	matches := make([]Match, 0, limit)
 	warnings := make([]string, 0)
-	for _, eventRef := range page.Items {
-		if len(matches) >= limit {
+	eventResults := s.fetchEventMatchesConcurrent(ctx, page.Items)
+	candidates := make([]*Match, 0, len(page.Items))
+
+	for _, eventResult := range eventResults {
+		if len(matches) >= limit && !liveOnly {
 			break
 		}
 
-		eventMatches, eventWarnings, eventErr := s.matchesFromEventRef(ctx, eventRef.URL)
-		if eventErr != nil {
-			warnings = append(warnings, fmt.Sprintf("event %s: %v", strings.TrimSpace(eventRef.URL), eventErr))
+		if eventResult.err != nil {
+			warnings = append(warnings, fmt.Sprintf("event %s: %v", strings.TrimSpace(eventResult.ref), eventResult.err))
 			continue
 		}
-		warnings = append(warnings, eventWarnings...)
+		warnings = append(warnings, eventResult.warnings...)
 
-		for _, eventMatch := range eventMatches {
-			match := eventMatch
+		for i := range eventResult.matches {
+			match := eventResult.matches[i]
 			s.enrichMatchTeamsFromIndex(&match)
-			if liveOnly && !isLiveMatch(match) {
-				warnings = append(warnings, s.hydrateMatchStatusOnly(ctx, &match, statusCache)...)
-			}
-			if liveOnly && !isLiveMatch(match) {
+			if liveOnly {
+				candidates = append(candidates, &match)
 				continue
 			}
+
 			match.ScoreSummary = matchScoreSummary(match.Teams)
 			matches = append(matches, match)
+			if len(matches) >= limit {
+				break
+			}
+		}
+	}
+
+	if liveOnly {
+		warnings = append(warnings, s.hydrateMatchStatusesConcurrent(ctx, candidates)...)
+		for _, candidate := range candidates {
+			if candidate == nil || !isLiveMatch(*candidate) {
+				continue
+			}
+			candidate.ScoreSummary = matchScoreSummary(candidate.Teams)
+			matches = append(matches, *candidate)
 			if len(matches) >= limit {
 				break
 			}
@@ -635,6 +652,86 @@ func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions
 	result.RequestedRef = resolved.RequestedRef
 	result.CanonicalRef = resolved.CanonicalRef
 	return result, nil
+}
+
+type eventMatchesResult struct {
+	ref      string
+	matches  []Match
+	warnings []string
+	err      error
+}
+
+func (s *MatchService) fetchEventMatchesConcurrent(ctx context.Context, refs []Ref) []eventMatchesResult {
+	results := make([]eventMatchesResult, len(refs))
+	sem := make(chan struct{}, matchListEventFetchConcurrency)
+	var wg sync.WaitGroup
+
+	for i, item := range refs {
+		wg.Add(1)
+		go func(index int, item Ref) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			ref := strings.TrimSpace(item.URL)
+			if ref == "" {
+				results[index] = eventMatchesResult{
+					ref: ref,
+					err: fmt.Errorf("empty event ref"),
+				}
+				return
+			}
+
+			reqCtx, cancel := context.WithTimeout(ctx, matchListEventFetchTimeout)
+			matches, warnings, err := s.matchesFromEventRef(reqCtx, ref)
+			cancel()
+			results[index] = eventMatchesResult{
+				ref:      ref,
+				matches:  matches,
+				warnings: warnings,
+				err:      err,
+			}
+		}(i, item)
+	}
+
+	wg.Wait()
+	return results
+}
+
+func (s *MatchService) hydrateMatchStatusesConcurrent(ctx context.Context, matches []*Match) []string {
+	type statusHydrationResult struct {
+		warnings []string
+	}
+
+	results := make([]statusHydrationResult, len(matches))
+	sem := make(chan struct{}, matchListStatusFetchConcurrency)
+	var wg sync.WaitGroup
+
+	for i, match := range matches {
+		if match == nil || isLiveMatch(*match) || strings.TrimSpace(match.StatusRef) == "" {
+			continue
+		}
+
+		wg.Add(1)
+		go func(index int, match *Match) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			reqCtx, cancel := context.WithTimeout(ctx, matchListStatusFetchTimeout)
+			warnings := s.hydrateMatchStatusOnly(reqCtx, match, map[string]matchStatusSnapshot{})
+			cancel()
+			results[index] = statusHydrationResult{warnings: warnings}
+		}(i, match)
+	}
+
+	wg.Wait()
+
+	warnings := make([]string, 0)
+	for _, result := range results {
+		warnings = append(warnings, result.warnings...)
+	}
+	return compactWarnings(warnings)
 }
 
 func (s *MatchService) lookupMatch(ctx context.Context, query string, opts MatchLookupOptions, statusOnly bool) (NormalizedResult, error) {

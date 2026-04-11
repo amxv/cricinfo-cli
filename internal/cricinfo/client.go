@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -138,7 +139,18 @@ func NewClient(cfg Config) (*Client, error) {
 
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{}
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          128,
+				MaxIdleConnsPerHost:   32,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   5 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		}
 	}
 
 	sleep := cfg.Sleep
@@ -207,7 +219,7 @@ func (c *Client) Fetch(ctx context.Context, ref string) (*Document, error) {
 			return nil, fmt.Errorf("read response %q: %w", requestURL, readErr)
 		}
 
-		if resp.StatusCode >= defaultRetryStatusCode && attempt < c.maxRetries {
+		if c.shouldRetryStatus(resp.StatusCode) && attempt < c.maxRetries {
 			if sleepErr := c.sleep(ctx, c.retryDelay(attempt)); sleepErr != nil {
 				return nil, sleepErr
 			}
@@ -346,6 +358,15 @@ func (c *Client) shouldRetryError(err error, parentCtx context.Context) bool {
 	}
 
 	return parentCtx.Err() == nil
+}
+
+func (c *Client) shouldRetryStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests:
+		return true
+	default:
+		return statusCode >= defaultRetryStatusCode
+	}
 }
 
 func (c *Client) retryDelay(attempt int) time.Duration {
