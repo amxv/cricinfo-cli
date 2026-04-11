@@ -137,7 +137,7 @@ func TestFieldPathFamilyCoverageLedgerKnownFamiliesMapped(t *testing.T) {
 func researchedTemplatesFromTSV(t *testing.T) []string {
 	t.Helper()
 
-	path := filepath.Join(repoRoot(t), "gg", "agent-outputs", "cricinfo-working-templates.tsv")
+	path := filepath.Join("testdata", "coverage", "cricinfo-working-templates.tsv")
 	file, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open working templates TSV %q: %v", path, err)
@@ -177,7 +177,7 @@ func researchedTemplatesFromTSV(t *testing.T) []string {
 func researchedFieldPathFamilies(t *testing.T) map[string]struct{} {
 	t.Helper()
 
-	path := filepath.Join(repoRoot(t), "gg", "agent-outputs", "cricinfo-field-path-catalog.txt")
+	path := filepath.Join("testdata", "coverage", "cricinfo-field-path-catalog.txt")
 	file, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open field-path catalog %q: %v", path, err)
@@ -230,24 +230,4 @@ func isNumericToken(value string) bool {
 		}
 	}
 	return true
-}
-
-func repoRoot(t *testing.T) string {
-	t.Helper()
-
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("unable to locate repository root from %q", dir)
-		}
-		dir = parent
-	}
 }
