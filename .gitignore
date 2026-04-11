@@ -14,3 +14,6 @@ npm-debug.log*
 # Local temp
 tmp/
 TMP/
+
+# Local agent outputs
+gg/
