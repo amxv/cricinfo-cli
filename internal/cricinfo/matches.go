@@ -233,6 +233,151 @@ func (s *MatchService) Situation(ctx context.Context, query string, opts MatchLo
 	return result, nil
 }
 
+// Phases resolves and returns fan-oriented innings phase splits (powerplay/middle/death).
+func (s *MatchService) Phases(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityMatchPhases
+		return *passthrough, nil
+	}
+
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	warnings := append([]string{}, lookup.warnings...)
+	warnings = append(warnings, s.hydrateMatch(ctx, lookup.match, statusCache, teamCache, scoreCache)...)
+
+	teams, teamWarnings, teamResult := s.selectTeamsFromMatch(ctx, *lookup.match, "", opts.LeagueID)
+	if teamResult != nil {
+		teamResult.Kind = EntityMatchPhases
+		return *teamResult, nil
+	}
+	warnings = append(warnings, teamWarnings...)
+
+	report := MatchPhases{
+		MatchID:       lookup.match.ID,
+		LeagueID:      lookup.match.LeagueID,
+		EventID:       lookup.match.EventID,
+		CompetitionID: nonEmpty(lookup.match.CompetitionID, lookup.match.ID),
+		Fixture:       nonEmpty(lookup.match.ShortDescription, lookup.match.Description),
+		Result:        nonEmpty(lookup.match.MatchState, lookup.match.Note),
+		Innings:       make([]MatchPhaseInning, 0),
+	}
+
+	for _, team := range teams {
+		inningsList, _, inningsWarnings := s.fetchTeamInnings(ctx, *lookup.match, team)
+		warnings = append(warnings, inningsWarnings...)
+		for i := range inningsList {
+			innings := inningsList[i]
+			statsWarnings := s.hydrateInningsTimelines(ctx, &innings)
+			warnings = append(warnings, statsWarnings...)
+			if !isMeaningfulPhaseInnings(innings) {
+				continue
+			}
+
+			phaseInnings := buildPhaseInnings(team, innings)
+			if !phaseInningsHasData(phaseInnings) {
+				continue
+			}
+			report.Innings = append(report.Innings, phaseInnings)
+		}
+	}
+
+	result := NewDataResult(EntityMatchPhases, report)
+	if len(warnings) > 0 {
+		result = NewPartialResult(EntityMatchPhases, report, compactWarnings(warnings)...)
+	}
+	result.RequestedRef = lookup.resolved.RequestedRef
+	result.CanonicalRef = lookup.resolved.CanonicalRef
+	return result, nil
+}
+
+func isMeaningfulPhaseInnings(innings Innings) bool {
+	if strings.TrimSpace(innings.Score) != "" {
+		return true
+	}
+	if innings.Runs > 0 || innings.Wickets > 0 || innings.Target > 0 {
+		return true
+	}
+	return len(innings.OverTimeline) > 0 || len(innings.WicketTimeline) > 0
+}
+
+func buildPhaseInnings(team Team, innings Innings) MatchPhaseInning {
+	out := MatchPhaseInning{
+		TeamID:        nonEmpty(strings.TrimSpace(team.ID), strings.TrimSpace(innings.TeamID)),
+		TeamName:      nonEmpty(strings.TrimSpace(team.ShortName), strings.TrimSpace(team.Name), strings.TrimSpace(innings.TeamName), strings.TrimSpace(innings.TeamID)),
+		InningsNumber: innings.InningsNumber,
+		Period:        innings.Period,
+		Score:         innings.Score,
+		Target:        innings.Target,
+		Powerplay:     PhaseSummary{Name: "Powerplay"},
+		Middle:        PhaseSummary{Name: "Middle"},
+		Death:         PhaseSummary{Name: "Death"},
+	}
+
+	bestRuns := -1
+	for _, over := range innings.OverTimeline {
+		phase := phaseBucket(over.Number)
+		switch phase {
+		case "Powerplay":
+			accumulatePhase(&out.Powerplay, over)
+		case "Middle":
+			accumulatePhase(&out.Middle, over)
+		case "Death":
+			accumulatePhase(&out.Death, over)
+		}
+
+		if over.Runs > bestRuns {
+			bestRuns = over.Runs
+			out.BestScoringOver = over.Number
+			out.BestScoringOverRuns = over.Runs
+		}
+		if over.WicketCount > out.CollapseWickets {
+			out.CollapseWickets = over.WicketCount
+			out.CollapseOver = over.Number
+		}
+	}
+
+	finalizePhase(&out.Powerplay)
+	finalizePhase(&out.Middle)
+	finalizePhase(&out.Death)
+
+	return out
+}
+
+func phaseBucket(overNumber int) string {
+	switch {
+	case overNumber >= 1 && overNumber <= 6:
+		return "Powerplay"
+	case overNumber >= 7 && overNumber <= 15:
+		return "Middle"
+	case overNumber >= 16:
+		return "Death"
+	default:
+		return "Middle"
+	}
+}
+
+func accumulatePhase(phase *PhaseSummary, over InningsOver) {
+	if phase == nil {
+		return
+	}
+	phase.Runs += over.Runs
+	phase.Wickets += over.WicketCount
+	phase.Overs += 1
+}
+
+func finalizePhase(phase *PhaseSummary) {
+	if phase == nil || phase.Overs <= 0 {
+		return
+	}
+	phase.RunRate = float64(phase.Runs) / phase.Overs
+}
+
+func phaseInningsHasData(innings MatchPhaseInning) bool {
+	return innings.Powerplay.Overs > 0 || innings.Middle.Overs > 0 || innings.Death.Overs > 0
+}
+
 // Innings resolves and returns innings summaries with over and wicket timelines when period statistics are available.
 func (s *MatchService) Innings(ctx context.Context, query string, opts MatchInningsOptions) (NormalizedResult, error) {
 	lookup, passthrough := s.resolveMatchLookup(ctx, query, MatchLookupOptions{LeagueID: opts.LeagueID})

@@ -255,6 +255,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatMatchView(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityMatchPhases {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Match Phases")
+			lines = append(lines, formatMatchPhases(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
@@ -362,6 +371,14 @@ func intString(value int) string {
 	return fmt.Sprintf("%d", value)
 }
 
+func defaultNumeric(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "0"
+	}
+	return raw
+}
+
 func sanitizeValue(value any, allFields bool) (any, error) {
 	blob, err := json.Marshal(value)
 	if err != nil {
@@ -447,6 +464,11 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 			return joinParts("situation", data)
 		}
 		return joinParts("situation", valueString(entity, "competitionId"))
+	case EntityMatchPhases:
+		return joinParts(
+			"match "+firstNonEmpty(valueString(entity, "matchId"), valueString(entity, "competitionId")),
+			fmt.Sprintf("%d innings", len(sliceValue(entity, "innings"))),
+		)
 	case EntityCompetition:
 		return joinParts(
 			firstNonEmpty(valueString(entity, "shortDescription"), valueString(entity, "description"), valueString(entity, "id")),
@@ -702,6 +724,8 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 		order = []string{"matchId", "competitionId", "eventId", "leagueId", "battingCards", "bowlingCards", "partnershipCards"}
 	case EntityMatchSituation:
 		order = []string{"matchId", "competitionId", "eventId", "leagueId", "oddsRef", "data"}
+	case EntityMatchPhases:
+		order = []string{"matchId", "competitionId", "eventId", "leagueId", "fixture", "result", "innings"}
 	case EntityStatCategory:
 		order = []string{"name", "displayName", "abbreviation"}
 	case EntityPartnership:
@@ -965,6 +989,66 @@ func formatMatchView(entity map[string]any) []string {
 	if teams := summarizeNamedItems(sliceValue(entity, "teams"), 4); teams != "" {
 		lines = append(lines, "Teams: "+teams)
 	}
+	return lines
+}
+
+func formatMatchPhases(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+	if matchID := firstNonEmpty(valueString(entity, "matchId"), valueString(entity, "competitionId")); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+	if fixture := valueString(entity, "fixture"); fixture != "" {
+		lines = append(lines, "Fixture: "+fixture)
+	}
+	if result := valueString(entity, "result"); result != "" {
+		lines = append(lines, "Result: "+result)
+	}
+
+	for _, raw := range sliceValue(entity, "innings") {
+		inn, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		lines = append(lines, "")
+		lines = append(lines, joinParts(
+			firstNonEmpty(valueString(inn, "teamName"), valueString(inn, "teamId")),
+			"innings "+valueString(inn, "inningsNumber")+"/"+valueString(inn, "period"),
+			valueString(inn, "score"),
+		))
+
+		lines = append(lines, "  Phases")
+		for _, key := range []string{"powerplay", "middle", "death"} {
+			phaseMap, ok := inn[key].(map[string]any)
+			if !ok {
+				continue
+			}
+			name := firstNonEmpty(valueString(phaseMap, "name"), strings.Title(key))
+			runs := defaultNumeric(valueString(phaseMap, "runs"))
+			wickets := defaultNumeric(valueString(phaseMap, "wickets"))
+			overs := defaultNumeric(valueString(phaseMap, "overs"))
+			runRate := defaultNumeric(valueString(phaseMap, "runRate"))
+			phaseLine := joinParts(
+				name,
+				"runs "+runs,
+				"wkts "+wickets,
+				"ov "+overs,
+				"rr "+runRate,
+			)
+			lines = append(lines, "  - "+phaseLine)
+		}
+
+		bestOver := valueString(inn, "bestScoringOver")
+		bestRuns := valueString(inn, "bestScoringOverRuns")
+		if bestOver != "" && bestRuns != "" {
+			lines = append(lines, "  Best Over: over "+bestOver+" ("+bestRuns+" runs)")
+		}
+		collapseOver := valueString(inn, "collapseOver")
+		collapseWickets := valueString(inn, "collapseWickets")
+		if collapseOver != "" && collapseWickets != "" && collapseWickets != "0" {
+			lines = append(lines, "  Pressure Over: over "+collapseOver+" ("+collapseWickets+" wickets)")
+		}
+	}
+
 	return lines
 }
 

@@ -16,6 +16,7 @@ const (
 	EntityMatch           EntityKind = "match"
 	EntityMatchScorecard  EntityKind = "match_scorecard"
 	EntityMatchSituation  EntityKind = "match_situation"
+	EntityMatchPhases     EntityKind = "match_phases"
 	EntityCompetition     EntityKind = "competition"
 	EntityCompOfficial    EntityKind = "competition_official"
 	EntityCompBroadcast   EntityKind = "competition_broadcast"
@@ -116,6 +117,43 @@ type MatchScorecard struct {
 	BowlingCards     []BowlingCard     `json:"bowlingCards,omitempty"`
 	PartnershipCards []PartnershipCard `json:"partnershipCards,omitempty"`
 	Extensions       map[string]any    `json:"extensions,omitempty"`
+}
+
+// MatchPhases is a fan-oriented phase/momentum breakdown for each innings.
+type MatchPhases struct {
+	MatchID       string             `json:"matchId,omitempty"`
+	LeagueID      string             `json:"leagueId,omitempty"`
+	EventID       string             `json:"eventId,omitempty"`
+	CompetitionID string             `json:"competitionId,omitempty"`
+	Fixture       string             `json:"fixture,omitempty"`
+	Result        string             `json:"result,omitempty"`
+	Innings       []MatchPhaseInning `json:"innings,omitempty"`
+}
+
+// MatchPhaseInning captures phase splits and momentum points for one innings.
+type MatchPhaseInning struct {
+	TeamID              string       `json:"teamId,omitempty"`
+	TeamName            string       `json:"teamName,omitempty"`
+	InningsNumber       int          `json:"inningsNumber,omitempty"`
+	Period              int          `json:"period,omitempty"`
+	Score               string       `json:"score,omitempty"`
+	Target              int          `json:"target,omitempty"`
+	Powerplay           PhaseSummary `json:"powerplay,omitempty"`
+	Middle              PhaseSummary `json:"middle,omitempty"`
+	Death               PhaseSummary `json:"death,omitempty"`
+	BestScoringOver     int          `json:"bestScoringOver,omitempty"`
+	BestScoringOverRuns int          `json:"bestScoringOverRuns,omitempty"`
+	CollapseOver        int          `json:"collapseOver,omitempty"`
+	CollapseWickets     int          `json:"collapseWickets,omitempty"`
+}
+
+// PhaseSummary is a normalized run/wicket split across a phase bucket.
+type PhaseSummary struct {
+	Name    string  `json:"name,omitempty"`
+	Runs    int     `json:"runs,omitempty"`
+	Wickets int     `json:"wickets,omitempty"`
+	Overs   float64 `json:"overs,omitempty"`
+	RunRate float64 `json:"runRate,omitempty"`
 }
 
 // BattingCard is a normalized batting card section from matchcards.
@@ -774,18 +812,18 @@ type FallOfWicket struct {
 
 // AnalysisScope captures the resolved analysis traversal scope.
 type AnalysisScope struct {
-	Mode            string           `json:"mode"`
-	RequestedLeagueID string         `json:"requestedLeagueId,omitempty"`
-	LeagueID        string           `json:"leagueId,omitempty"`
-	LeagueName      string           `json:"leagueName,omitempty"`
-	Seasons         []string         `json:"seasons,omitempty"`
-	MatchIDs        []string         `json:"matchIds,omitempty"`
-	MatchCount      int              `json:"matchCount"`
-	DateFrom        string           `json:"dateFrom,omitempty"`
-	DateTo          string           `json:"dateTo,omitempty"`
-	TypeQuery       string           `json:"type,omitempty"`
-	GroupQuery      string           `json:"group,omitempty"`
-	HydrationMetric HydrationMetrics `json:"hydrationMetrics,omitempty"`
+	Mode              string           `json:"mode"`
+	RequestedLeagueID string           `json:"requestedLeagueId,omitempty"`
+	LeagueID          string           `json:"leagueId,omitempty"`
+	LeagueName        string           `json:"leagueName,omitempty"`
+	Seasons           []string         `json:"seasons,omitempty"`
+	MatchIDs          []string         `json:"matchIds,omitempty"`
+	MatchCount        int              `json:"matchCount"`
+	DateFrom          string           `json:"dateFrom,omitempty"`
+	DateTo            string           `json:"dateTo,omitempty"`
+	TypeQuery         string           `json:"type,omitempty"`
+	GroupQuery        string           `json:"group,omitempty"`
+	HydrationMetric   HydrationMetrics `json:"hydrationMetrics,omitempty"`
 }
 
 // AnalysisFilters captures user-level row filters.
@@ -924,6 +962,8 @@ func kindPlural(kind EntityKind) string {
 		return "match scorecards"
 	case EntityMatchSituation:
 		return "match situations"
+	case EntityMatchPhases:
+		return "match phase reports"
 	case EntityCompetition:
 		return "competitions"
 	case EntityCompOfficial:

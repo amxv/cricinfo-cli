@@ -19,6 +19,7 @@ type matchCommandService interface {
 	Details(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Plays(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Situation(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Phases(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Innings(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
 	Partnerships(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
 	FallOfWicket(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
@@ -230,6 +231,26 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 
+	phasesCmd := &cobra.Command{
+		Use:   "phases <match>",
+		Short: "Show powerplay, middle, and death-over phase splits for each innings",
+		Long: strings.Join([]string{
+			"Resolve a match and show fan-friendly phase splits (powerplay/middle/death) with momentum markers.",
+			"",
+			"Next steps:",
+			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches deliveries <match> --team <team> --innings <n> --period <n>",
+			"  cricinfo matches fow <match> --team <team> --innings <n> --period <n>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Phases(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+
 	inningsCmd := &cobra.Command{
 		Use:   "innings <match>",
 		Short: "Show innings summaries with over and wicket timelines",
@@ -375,6 +396,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		detailsCmd,
 		playsCmd,
 		situationCmd,
+		phasesCmd,
 		inningsCmd,
 		partnershipsCmd,
 		fowCmd,

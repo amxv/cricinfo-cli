@@ -19,6 +19,7 @@ type fakeMatchService struct {
 	detailsResult   cricinfo.NormalizedResult
 	playsResult     cricinfo.NormalizedResult
 	situationResult cricinfo.NormalizedResult
+	phasesResult    cricinfo.NormalizedResult
 	inningsResult   cricinfo.NormalizedResult
 	partnerships    cricinfo.NormalizedResult
 	fowResult       cricinfo.NormalizedResult
@@ -66,6 +67,10 @@ func (f *fakeMatchService) Plays(context.Context, string, cricinfo.MatchLookupOp
 
 func (f *fakeMatchService) Situation(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
 	return f.situationResult, nil
+}
+
+func (f *fakeMatchService) Phases(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
+	return f.phasesResult, nil
 }
 
 func (f *fakeMatchService) Innings(_ context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error) {
@@ -150,6 +155,12 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 		detailsResult:   cricinfo.NewListResult(cricinfo.EntityDeliveryEvent, []any{delivery}),
 		playsResult:     cricinfo.NewListResult(cricinfo.EntityDeliveryEvent, []any{delivery}),
 		situationResult: cricinfo.NewDataResult(cricinfo.EntityMatchSituation, situation),
+		phasesResult: cricinfo.NewDataResult(cricinfo.EntityMatchPhases, cricinfo.MatchPhases{
+			MatchID: "1529474",
+			Innings: []cricinfo.MatchPhaseInning{
+				{TeamName: "BOOST", InningsNumber: 1, Period: 3, Score: "69/2 (19 ov)"},
+			},
+		}),
 		inningsResult: cricinfo.NewListResult(cricinfo.EntityInnings, []any{
 			cricinfo.Innings{
 				TeamName:      "BOOST",
