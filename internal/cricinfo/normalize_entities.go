@@ -1033,6 +1033,16 @@ func NormalizePartnership(data []byte) (*Partnership, error) {
 		),
 	}
 
+	if partnership.WicketNumber == 0 {
+		partnership.WicketNumber = parseInt(ids["partnershipId"])
+	}
+	if partnership.Runs == 0 && partnership.End.Runs > partnership.Start.Runs {
+		partnership.Runs = partnership.End.Runs - partnership.Start.Runs
+	}
+	if partnership.Overs == 0 && partnership.End.Overs > partnership.Start.Overs {
+		partnership.Overs = partnership.End.Overs - partnership.Start.Overs
+	}
+
 	return partnership, nil
 }
 
@@ -1096,6 +1106,12 @@ func NormalizeFallOfWicket(data []byte) (*FallOfWicket, error) {
 
 	if fow.WicketNumber == 0 {
 		fow.WicketNumber = parseInt(ids["fowId"])
+	}
+	if fow.Runs == 0 && fow.RunsScored > 0 {
+		fow.Runs = fow.RunsScored
+	}
+	if fow.RunsScored == 0 && fow.Runs > 0 {
+		fow.RunsScored = fow.Runs
 	}
 
 	return fow, nil

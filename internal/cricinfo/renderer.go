@@ -274,13 +274,41 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 		return writeTextLines(w, lines)
 	}
 
-	lines = append(lines, fmt.Sprintf("%s (%d)", titleize(kindPlural(result.Kind)), len(result.Items)))
-	for i, item := range result.Items {
+	if result.Kind == EntityDeliveryEvent || result.Kind == EntityPlayerDelivery {
+		lines = append(lines, fmt.Sprintf("%s (%d)", titleize(kindPlural(result.Kind)), len(result.Items)))
+		for i, item := range result.Items {
+			summary := summarizeDeliveryListItem(item, result.Kind)
+			if strings.TrimSpace(summary) == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("%d. %s", i+1, summary))
+		}
+		return writeTextLines(w, lines)
+	}
+
+	summaries := make([]string, 0, len(result.Items))
+	for _, item := range result.Items {
 		itemMap, err := toMap(item, opts.AllFields)
 		if err != nil {
 			return err
 		}
-		lines = append(lines, fmt.Sprintf("%d. %s", i+1, summarizeEntity(itemMap, result.Kind, opts.Verbose)))
+		summary := summarizeEntity(itemMap, result.Kind, opts.Verbose)
+		if strings.TrimSpace(summary) == "" {
+			continue
+		}
+		summaries = append(summaries, summary)
+	}
+	if len(summaries) == 0 {
+		message := result.Message
+		if message == "" {
+			message = fmt.Sprintf("No %s found.", kindPlural(result.Kind))
+		}
+		lines = append(lines, sentenceCase(message))
+		return writeTextLines(w, lines)
+	}
+	lines = append(lines, fmt.Sprintf("%s (%d)", titleize(kindPlural(result.Kind)), len(summaries)))
+	for i, summary := range summaries {
+		lines = append(lines, fmt.Sprintf("%d. %s", i+1, summary))
 	}
 
 	return writeTextLines(w, lines)
@@ -293,6 +321,45 @@ func writeTextLines(w io.Writer, lines []string) error {
 		}
 	}
 	return nil
+}
+
+func summarizeDeliveryListItem(item any, kind EntityKind) string {
+	switch typed := item.(type) {
+	case DeliveryEvent:
+		short := firstNonEmpty(strings.TrimSpace(typed.ShortText), strings.TrimSpace(typed.Text))
+		if short == "" {
+			short = joinParts("over "+intString(typed.OverNumber), "ball "+intString(typed.BallNumber))
+		}
+		if kind == EntityPlayerDelivery {
+			return joinParts(short, strings.Join(typed.Involvement, ","), overBallString(typed.OverNumber, typed.BallNumber))
+		}
+		return short
+	case map[string]any:
+		short := firstNonEmpty(valueString(typed, "shortText"), valueString(typed, "text"))
+		if short == "" {
+			short = joinParts("over "+valueString(typed, "overNumber"), "ball "+valueString(typed, "ballNumber"))
+		}
+		if kind == EntityPlayerDelivery {
+			return joinParts(short, involvementLabel(typed), overBallLabel(typed))
+		}
+		return short
+	default:
+		return ""
+	}
+}
+
+func overBallString(over, ball int) string {
+	if over <= 0 || ball <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("over %d.%d", over, ball)
+}
+
+func intString(value int) string {
+	if value <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", value)
 }
 
 func sanitizeValue(value any, allFields bool) (any, error) {
@@ -470,16 +537,26 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 	case EntityStandingsGroup:
 		return joinParts(valueString(entity, "id"), "season "+valueString(entity, "seasonId"))
 	case EntityInnings:
+		if valueString(entity, "score") == "" &&
+			valueString(entity, "runs") == "" &&
+			valueString(entity, "wickets") == "" &&
+			valueString(entity, "target") == "" &&
+			valueString(entity, "isBatting") == "false" {
+			return ""
+		}
 		score := valueString(entity, "score")
 		if score == "" {
 			score = joinParts(valueString(entity, "runs")+"/"+valueString(entity, "wickets"), valueString(entity, "overs")+" ov")
 		}
-		return joinParts(
+		parts := []string{
 			firstNonEmpty(valueString(entity, "teamName"), valueString(entity, "teamId")),
-			"innings "+valueString(entity, "inningsNumber")+"/"+valueString(entity, "period"),
+			"innings " + valueString(entity, "inningsNumber") + "/" + valueString(entity, "period"),
 			score,
-			fmt.Sprintf("%d wickets", len(sliceValue(entity, "wicketTimeline"))),
-		)
+		}
+		if wc := len(sliceValue(entity, "wicketTimeline")); wc > 0 {
+			parts = append(parts, fmt.Sprintf("%d wickets", wc))
+		}
+		return joinParts(parts...)
 	case EntityDeliveryEvent:
 		short := firstNonEmpty(valueString(entity, "shortText"), valueString(entity, "text"))
 		if short == "" {
@@ -489,16 +566,32 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 	case EntityStatCategory:
 		return joinParts(firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "name")), fmt.Sprintf("%d stats", len(sliceValue(entity, "stats"))))
 	case EntityPartnership:
+		runsText := ""
+		if runs := valueString(entity, "runs"); runs != "" {
+			runsText = runs + " runs"
+		} else if valueString(entity, "overs") != "" {
+			runsText = "0 runs"
+		}
+		oversText := ""
+		if overs := valueString(entity, "overs"); overs != "" {
+			oversText = overs + " ov"
+		}
 		return joinParts(
 			firstNonEmpty(valueString(entity, "wicketName"), "partnership "+valueString(entity, "id")),
-			valueString(entity, "runs")+" runs",
-			valueString(entity, "overs")+" ov",
+			runsText,
+			oversText,
 			"innings "+valueString(entity, "inningsId")+"/"+valueString(entity, "period"),
 		)
 	case EntityFallOfWicket:
+		scoreText := ""
+		if runs := valueString(entity, "runs"); runs != "" {
+			scoreText = runs + "/" + valueString(entity, "wicketNumber")
+		} else if valueString(entity, "wicketNumber") == "1" {
+			scoreText = "0/1"
+		}
 		return joinParts(
 			"wicket "+valueString(entity, "wicketNumber"),
-			valueString(entity, "runs")+"/"+valueString(entity, "wicketNumber"),
+			scoreText,
 			valueString(entity, "wicketOver")+" ov",
 			"innings "+valueString(entity, "inningsId")+"/"+valueString(entity, "period"),
 		)
@@ -715,7 +808,7 @@ func formatInningsTimelines(entity map[string]any) []string {
 			row := joinParts(
 				"Over "+valueString(over, "number"),
 				valueString(over, "runs")+" runs",
-				valueString(over, "wicketCount")+" wkts",
+				wicketCountLabel(valueString(over, "wicketCount")),
 			)
 			if row != "" {
 				lines = append(lines, "  "+row)
@@ -752,6 +845,14 @@ func formatInningsTimelines(entity map[string]any) []string {
 	}
 
 	return lines
+}
+
+func wicketCountLabel(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "0" {
+		return ""
+	}
+	return raw + " wkts"
 }
 
 func formatPlayerProfile(entity map[string]any) []string {

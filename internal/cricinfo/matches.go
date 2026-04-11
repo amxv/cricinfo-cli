@@ -13,7 +13,9 @@ import (
 )
 
 const defaultMatchListLimit = 20
-const deliveryFetchConcurrency = 12
+const deliveryFetchConcurrency = 48
+const detailSubresourceFetchConcurrency = 24
+const detailItemFetchTimeout = 3 * time.Second
 const matchTeamQueryScanRange = 6
 const maxTeamQueryEventCandidates = 36
 const teamQueryEventFetchTimeout = 1500 * time.Millisecond
@@ -959,7 +961,9 @@ func (s *MatchService) loadDeliveryEvents(ctx context.Context, refs []Ref) ([]De
 				return
 			}
 
-			itemResolved, itemErr := s.resolveRefChainResilient(ctx, itemRef)
+			itemCtx, cancel := context.WithTimeout(ctx, detailItemFetchTimeout)
+			itemResolved, itemErr := s.resolveRefChainResilient(itemCtx, itemRef)
+			cancel()
 			if itemErr != nil {
 				results[index] = deliveryLoadResult{index: index, warning: fmt.Sprintf("detail %s: %v", itemRef, itemErr)}
 				return
@@ -1293,26 +1297,55 @@ func (s *MatchService) fetchDetailedRefCollection(
 		return nil, nil, nil, err
 	}
 
-	items := make([]any, 0, len(pageItems))
-	for _, item := range pageItems {
-		itemRef := strings.TrimSpace(item.URL)
-		if itemRef == "" {
-			warnings = append(warnings, "skip item with empty ref")
-			continue
-		}
+	type normalizedItemResult struct {
+		index   int
+		item    any
+		warning string
+	}
 
-		itemResolved, itemErr := s.resolveRefChainResilient(ctx, itemRef)
-		if itemErr != nil {
-			warnings = append(warnings, fmt.Sprintf("item %s: %v", itemRef, itemErr))
-			continue
-		}
+	results := make([]normalizedItemResult, len(pageItems))
+	sem := make(chan struct{}, detailSubresourceFetchConcurrency)
+	var wg sync.WaitGroup
+	for i, item := range pageItems {
+		wg.Add(1)
+		go func(index int, item Ref) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		normalized, normalizeErr := normalize(itemResolved.Body)
-		if normalizeErr != nil {
-			warnings = append(warnings, fmt.Sprintf("item %s: %v", itemRef, normalizeErr))
+			itemRef := strings.TrimSpace(item.URL)
+			if itemRef == "" {
+				results[index] = normalizedItemResult{index: index, warning: "skip item with empty ref"}
+				return
+			}
+
+			itemCtx, cancel := context.WithTimeout(ctx, detailItemFetchTimeout)
+			itemResolved, itemErr := s.resolveRefChainResilient(itemCtx, itemRef)
+			cancel()
+			if itemErr != nil {
+				results[index] = normalizedItemResult{index: index, warning: fmt.Sprintf("item %s: %v", itemRef, itemErr)}
+				return
+			}
+
+			normalized, normalizeErr := normalize(itemResolved.Body)
+			if normalizeErr != nil {
+				results[index] = normalizedItemResult{index: index, warning: fmt.Sprintf("item %s: %v", itemRef, normalizeErr)}
+				return
+			}
+			results[index] = normalizedItemResult{index: index, item: normalized}
+		}(i, item)
+	}
+	wg.Wait()
+
+	items := make([]any, 0, len(results))
+	for _, result := range results {
+		if strings.TrimSpace(result.warning) != "" {
+			warnings = append(warnings, result.warning)
 			continue
 		}
-		items = append(items, normalized)
+		if result.item != nil {
+			items = append(items, result.item)
+		}
 	}
 
 	return resolved, items, compactWarnings(warnings), nil
