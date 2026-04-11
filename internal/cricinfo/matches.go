@@ -408,6 +408,49 @@ func (s *MatchService) Situation(ctx context.Context, query string, opts MatchLo
 	return result, nil
 }
 
+// LiveView resolves and returns a fan-first live view synthesized from delivery details.
+func (s *MatchService) LiveView(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityMatchSituation
+		return *passthrough, nil
+	}
+
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	hydrationWarnings := s.hydrateMatch(ctx, lookup.match, statusCache, teamCache, scoreCache)
+
+	live, liveWarnings := s.buildLiveView(ctx, *lookup.match)
+	if live == nil {
+		return NormalizedResult{
+			Kind:    EntityMatchSituation,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("no live view data available for match %q", lookup.match.ID),
+		}, nil
+	}
+
+	situation := &MatchSituation{
+		Ref:           matchSubresourceRef(*lookup.match, "situation", "situation"),
+		LeagueID:      lookup.match.LeagueID,
+		EventID:       lookup.match.EventID,
+		CompetitionID: lookup.match.CompetitionID,
+		MatchID:       lookup.match.ID,
+		Live:          live,
+	}
+	warnings := append([]string{}, lookup.warnings...)
+	warnings = append(warnings, hydrationWarnings...)
+	warnings = append(warnings, liveWarnings...)
+
+	result := NewDataResult(EntityMatchSituation, situation)
+	if len(warnings) > 0 {
+		result = NewPartialResult(EntityMatchSituation, situation, warnings...)
+	}
+	result.RequestedRef = lookup.resolved.RequestedRef
+	result.CanonicalRef = lookup.resolved.CanonicalRef
+	return result, nil
+}
+
 // Phases resolves and returns fan-oriented innings phase splits (powerplay/middle/death).
 func (s *MatchService) Phases(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
 	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)

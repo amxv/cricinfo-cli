@@ -20,6 +20,7 @@ type fakeMatchService struct {
 	detailsResult   cricinfo.NormalizedResult
 	playsResult     cricinfo.NormalizedResult
 	situationResult cricinfo.NormalizedResult
+	liveViewResult  cricinfo.NormalizedResult
 	phasesResult    cricinfo.NormalizedResult
 	inningsResult   cricinfo.NormalizedResult
 	partnerships    cricinfo.NormalizedResult
@@ -72,6 +73,10 @@ func (f *fakeMatchService) Plays(context.Context, string, cricinfo.MatchLookupOp
 
 func (f *fakeMatchService) Situation(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
 	return f.situationResult, nil
+}
+
+func (f *fakeMatchService) LiveView(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
+	return f.liveViewResult, nil
 }
 
 func (f *fakeMatchService) Phases(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
@@ -161,6 +166,19 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 		detailsResult:   cricinfo.NewListResult(cricinfo.EntityDeliveryEvent, []any{delivery}),
 		playsResult:     cricinfo.NewListResult(cricinfo.EntityDeliveryEvent, []any{delivery}),
 		situationResult: cricinfo.NewDataResult(cricinfo.EntityMatchSituation, situation),
+		liveViewResult: cricinfo.NewDataResult(cricinfo.EntityMatchSituation, cricinfo.MatchSituation{
+			MatchID: "1529474",
+			Live: &cricinfo.MatchLiveView{
+				Score: "69/2",
+				Batters: []cricinfo.LiveBatterView{
+					{PlayerName: "Numan Shah", Runs: 52, Balls: 41, StrikeRate: 126.82, OnStrike: true},
+				},
+				Bowlers: []cricinfo.LiveBowlerView{
+					{PlayerName: "Hayatullah Noori", Overs: 3, Conceded: 21, Wickets: 1, Economy: 7.0},
+				},
+				RecentBalls: []cricinfo.DeliveryEvent{delivery},
+			},
+		}),
 		phasesResult: cricinfo.NewDataResult(cricinfo.EntityMatchPhases, cricinfo.MatchPhases{
 			MatchID: "1529474",
 			Innings: []cricinfo.MatchPhaseInning{
@@ -322,6 +340,16 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	}
 	if situationPayload["kind"] != string(cricinfo.EntityMatchSituation) {
 		t.Fatalf("expected kind %q in situation output, got %#v", cricinfo.EntityMatchSituation, situationPayload["kind"])
+	}
+
+	var liveViewOut bytes.Buffer
+	var liveViewErr bytes.Buffer
+	if err := Run([]string{"matches", "live-view", "1529474", "--format", "text"}, &liveViewOut, &liveViewErr); err != nil {
+		t.Fatalf("Run matches live-view --format text error: %v", err)
+	}
+	liveViewText := liveViewOut.String()
+	if !strings.Contains(liveViewText, "Batters") || !strings.Contains(liveViewText, "Bowlers") {
+		t.Fatalf("expected batters/bowlers sections in live-view output, got %q", liveViewText)
 	}
 
 	var inningsOut bytes.Buffer

@@ -20,6 +20,7 @@ type matchCommandService interface {
 	Details(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Plays(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Situation(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	LiveView(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Phases(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Innings(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
 	Partnerships(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
@@ -53,6 +54,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"  cricinfo matches list",
 			"  cricinfo matches show <match>",
 			"  cricinfo matches status <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches scorecard <match>",
 			"  cricinfo matches innings <match>",
 		}, "\n"),
@@ -74,6 +76,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"  cricinfo matches show <match>",
 			"  cricinfo matches status <match>",
 			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches innings <match>",
 		}, "\n"),
 		Args: cobra.NoArgs,
@@ -98,6 +101,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"  cricinfo matches show <match>",
 			"  cricinfo matches status <match>",
 			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches innings <match>",
 		}, "\n"),
 		Args: cobra.NoArgs,
@@ -141,6 +145,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"Next steps:",
 			"  cricinfo matches status <match>",
 			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches innings <match>",
 		}, "\n"),
 		Args: cobra.MinimumNArgs(1),
@@ -161,6 +166,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"Next steps:",
 			"  cricinfo matches show <match>",
 			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches innings <match>",
 		}, "\n"),
 		Args: cobra.MinimumNArgs(1),
@@ -181,6 +187,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"Next steps:",
 			"  cricinfo matches details <match>",
 			"  cricinfo matches plays <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches situation <match>",
 		}, "\n"),
 		Args: cobra.MinimumNArgs(1),
@@ -221,6 +228,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"Next steps:",
 			"  cricinfo matches details <match>",
 			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches situation <match>",
 		}, "\n"),
 		Args: cobra.MinimumNArgs(1),
@@ -241,6 +249,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			"Next steps:",
 			"  cricinfo matches status <match>",
 			"  cricinfo matches details <match>",
+			"  cricinfo matches live-view <match>",
 			"  cricinfo matches scorecard <match>",
 		}, "\n"),
 		Args: cobra.MinimumNArgs(1),
@@ -248,6 +257,31 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			query := strings.TrimSpace(strings.Join(args, " "))
 			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
 				return service.Situation(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
+
+	liveViewCmd := &cobra.Command{
+		Use:   "live-view <match>",
+		Short: "Show fan-first live snapshot (batters, bowlers, figures, recent balls)",
+		Long: strings.Join([]string{
+			"Resolve a match and render a synthesized live snapshot from delivery details and roster metadata.",
+			"",
+			"Shows:",
+			"  - current batters with runs/balls/strike-rate/boundaries",
+			"  - current bowlers with figures and economy",
+			"  - recent balls with over.ball and running score",
+			"",
+			"Next steps:",
+			"  cricinfo matches plays <match>",
+			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches situation <match>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.LiveView(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
 			})
 		},
 	}
@@ -418,6 +452,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		detailsCmd,
 		playsCmd,
 		situationCmd,
+		liveViewCmd,
 		phasesCmd,
 		inningsCmd,
 		partnershipsCmd,
