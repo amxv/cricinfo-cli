@@ -472,10 +472,37 @@ func mergeAliasSlices(slices ...[]string) []string {
 			}
 			seen[normalized] = struct{}{}
 			out = append(out, value)
+			if acronym := aliasAcronym(normalized); acronym != "" {
+				if _, ok := seen[acronym]; !ok {
+					seen[acronym] = struct{}{}
+					out = append(out, acronym)
+				}
+			}
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+func aliasAcronym(normalized string) string {
+	tokens := strings.Fields(strings.TrimSpace(normalized))
+	if len(tokens) < 2 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, token := range tokens {
+		if token == "" {
+			continue
+		}
+		builder.WriteByte(token[0])
+	}
+
+	acronym := strings.TrimSpace(builder.String())
+	if len(acronym) < 2 {
+		return ""
+	}
+	return acronym
 }
 
 func aliasSet(aliases []string) map[string]struct{} {

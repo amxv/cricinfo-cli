@@ -131,6 +131,15 @@ func (r *Resolver) Search(ctx context.Context, kind EntityKind, query string, op
 		PreferredLeagueID: strings.TrimSpace(opts.LeagueID),
 		PreferredMatchID:  strings.TrimSpace(opts.MatchID),
 	})
+	if kind == EntityMatch && strings.TrimSpace(query) != "" && len(entities) == 0 {
+		if err := r.seedFromEventsFresh(ctx); err != nil {
+			warnings = append(warnings, err.Error())
+		}
+		entities = r.index.Search(kind, query, limit, SearchContext{
+			PreferredLeagueID: strings.TrimSpace(opts.LeagueID),
+			PreferredMatchID:  strings.TrimSpace(opts.MatchID),
+		})
+	}
 
 	_ = r.index.Persist()
 
@@ -166,8 +175,16 @@ func (r *Resolver) seedContext(ctx context.Context, opts ResolveOptions) error {
 }
 
 func (r *Resolver) seedFromEvents(ctx context.Context) error {
+	return r.seedFromEventsWithTTL(ctx, true)
+}
+
+func (r *Resolver) seedFromEventsFresh(ctx context.Context) error {
+	return r.seedFromEventsWithTTL(ctx, false)
+}
+
+func (r *Resolver) seedFromEventsWithTTL(ctx context.Context, respectTTL bool) error {
 	last := r.index.LastEventsSeedAt()
-	if !last.IsZero() && r.now().Sub(last) < r.eventSeedTTL {
+	if respectTTL && !last.IsZero() && r.now().Sub(last) < r.eventSeedTTL {
 		return nil
 	}
 
@@ -188,7 +205,11 @@ func (r *Resolver) seedFromEvents(ctx context.Context) error {
 	successCount := 0
 	seedErrors := make([]string, 0)
 	for i := 0; i < limit; i++ {
-		if err := r.seedEventRef(ctx, page.Items[i].URL); err != nil {
+		seedFn := r.seedEventRef
+		if !respectTTL {
+			seedFn = r.seedEventRefFresh
+		}
+		if err := seedFn(ctx, page.Items[i].URL); err != nil {
 			seedErrors = append(seedErrors, fmt.Sprintf("%s (%v)", page.Items[i].URL, err))
 			continue
 		}
@@ -266,11 +287,19 @@ func (r *Resolver) seedNumericID(ctx context.Context, kind EntityKind, id string
 }
 
 func (r *Resolver) seedEventRef(ctx context.Context, ref string) error {
+	return r.seedEventRefWithHydration(ctx, ref, true)
+}
+
+func (r *Resolver) seedEventRefFresh(ctx context.Context, ref string) error {
+	return r.seedEventRefWithHydration(ctx, ref, false)
+}
+
+func (r *Resolver) seedEventRefWithHydration(ctx context.Context, ref string, checkHydrated bool) error {
 	ref = r.absoluteRef(ref)
 	if ref == "" {
 		return fmt.Errorf("empty event ref")
 	}
-	if r.isHydrated(ref) {
+	if checkHydrated && r.isHydrated(ref) {
 		return nil
 	}
 
@@ -317,6 +346,17 @@ func (r *Resolver) seedEventRef(ctx context.Context, ref string) error {
 
 	competitions := mapSliceField(payload, "competitions")
 	for _, comp := range competitions {
+		compRef := stringField(comp, "$ref")
+		if compRef != "" && len(mapSliceField(comp, "competitors")) == 0 {
+			seedCompetitionFn := r.seedCompetitionRef
+			if !checkHydrated {
+				seedCompetitionFn = r.seedCompetitionRefFresh
+			}
+			if err := seedCompetitionFn(ctx, compRef); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := r.seedCompetitionMap(ctx, comp, leagueID, eventID, eventName); err != nil {
 			return err
 		}
@@ -329,11 +369,19 @@ func (r *Resolver) seedEventRef(ctx context.Context, ref string) error {
 }
 
 func (r *Resolver) seedCompetitionRef(ctx context.Context, ref string) error {
+	return r.seedCompetitionRefWithHydration(ctx, ref, true)
+}
+
+func (r *Resolver) seedCompetitionRefFresh(ctx context.Context, ref string) error {
+	return r.seedCompetitionRefWithHydration(ctx, ref, false)
+}
+
+func (r *Resolver) seedCompetitionRefWithHydration(ctx context.Context, ref string, checkHydrated bool) error {
 	ref = r.absoluteRef(ref)
 	if ref == "" {
 		return fmt.Errorf("empty competition ref")
 	}
-	if r.isHydrated(ref) {
+	if checkHydrated && r.isHydrated(ref) {
 		return nil
 	}
 
@@ -413,36 +461,34 @@ func (r *Resolver) seedCompetitionMap(ctx context.Context, comp map[string]any, 
 }
 
 func (r *Resolver) matchTeamAliasesFromCompetitor(ctx context.Context, competitor map[string]any, leagueID, matchID string) []string {
+	team := mapField(competitor, "team")
 	aliases := []string{
-		stringField(mapField(competitor, "team"), "displayName"),
-		stringField(mapField(competitor, "team"), "name"),
-		stringField(mapField(competitor, "team"), "shortDisplayName"),
-		stringField(mapField(competitor, "team"), "shortName"),
-		stringField(mapField(competitor, "team"), "abbreviation"),
+		stringField(team, "displayName"),
+		stringField(team, "name"),
+		stringField(team, "shortDisplayName"),
+		stringField(team, "shortName"),
+		stringField(team, "abbreviation"),
 	}
 
 	teamRef := refFromField(competitor, "team")
 	teamID := nonEmpty(
 		refIDs(teamRef)["teamId"],
-		stringField(mapField(competitor, "team"), "id"),
+		stringField(team, "id"),
 		stringField(competitor, "id"),
 	)
 	if teamID == "" {
-		return aliases
+		return expandKnownTeamAliases(aliases)
 	}
 
 	if existing, ok := r.index.FindByID(EntityTeam, teamID); ok {
 		aliases = append(aliases, existing.Name, existing.ShortName)
-	}
-	if hasNonEmptyAlias(aliases...) {
-		return aliases
 	}
 
 	_ = r.seedTeamByID(ctx, teamID, leagueID, matchID)
 	if existing, ok := r.index.FindByID(EntityTeam, teamID); ok {
 		aliases = append(aliases, existing.Name, existing.ShortName)
 	}
-	return aliases
+	return expandKnownTeamAliases(aliases)
 }
 
 func hasNonEmptyAlias(values ...string) bool {
@@ -452,6 +498,37 @@ func hasNonEmptyAlias(values ...string) bool {
 		}
 	}
 	return false
+}
+
+func expandKnownTeamAliases(values []string) []string {
+	expanded := append([]string{}, values...)
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		normalized := normalizeAlias(value)
+		if normalized == "" {
+			continue
+		}
+		seen[normalized] = struct{}{}
+	}
+
+	add := func(value string) {
+		normalized := normalizeAlias(value)
+		if normalized == "" {
+			return
+		}
+		if _, ok := seen[normalized]; ok {
+			return
+		}
+		seen[normalized] = struct{}{}
+		expanded = append(expanded, value)
+	}
+
+	for _, value := range values {
+		for _, alias := range knownIPLTeamAliases[normalizeAlias(value)] {
+			add(alias)
+		}
+	}
+	return expanded
 }
 
 func (r *Resolver) seedCompetitorMap(ctx context.Context, competitor map[string]any, leagueID, eventID, matchID string) error {

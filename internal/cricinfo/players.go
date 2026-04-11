@@ -546,9 +546,36 @@ func (s *PlayerService) statistics(ctx context.Context, query string, opts Playe
 		playerStats.PlayerRef = strings.TrimSpace(lookup.player.Ref)
 	}
 
+	warnings := append([]string{}, lookup.warnings...)
+	if playerStatsLooksPlaceholder(playerStats, resolved) {
+		fallbackResolved, fallbackStats, fallbackWarnings, ok := s.fallbackPlayerStatsFromMatchContext(ctx, lookup, opts)
+		warnings = append(warnings, fallbackWarnings...)
+		if ok {
+			warnings = append(warnings, "global athlete statistics were placeholder; using match-context statistics")
+			compact := compactWarnings(warnings)
+			result := NewDataResult(EntityPlayerStats, *fallbackStats)
+			if len(compact) > 0 {
+				result = NewPartialResult(EntityPlayerStats, *fallbackStats, compact...)
+			}
+			if fallbackResolved != nil {
+				result.RequestedRef = fallbackResolved.RequestedRef
+				result.CanonicalRef = fallbackResolved.CanonicalRef
+			}
+			return result, nil
+		}
+		warnings = append(warnings, fmt.Sprintf("global athlete statistics for %q appear placeholder and no match-context fallback was found", nonEmpty(lookup.player.DisplayName, lookup.entity.Name, query)))
+		result := NewDataResult(EntityPlayerStats, *playerStats)
+		if compact := compactWarnings(warnings); len(compact) > 0 {
+			result = NewPartialResult(EntityPlayerStats, *playerStats, compact...)
+		}
+		result.RequestedRef = resolved.RequestedRef
+		result.CanonicalRef = resolved.CanonicalRef
+		return result, nil
+	}
+
 	result := NewDataResult(EntityPlayerStats, *playerStats)
-	if len(lookup.warnings) > 0 {
-		result = NewPartialResult(EntityPlayerStats, *playerStats, lookup.warnings...)
+	if compact := compactWarnings(warnings); len(compact) > 0 {
+		result = NewPartialResult(EntityPlayerStats, *playerStats, compact...)
 	}
 	result.RequestedRef = resolved.RequestedRef
 	result.CanonicalRef = resolved.CanonicalRef
@@ -601,6 +628,213 @@ func (s *PlayerService) resolvePlayerLookup(ctx context.Context, query string, o
 		statsRef:  "/athletes/" + strings.TrimSpace(player.ID) + "/statistics",
 		statsKind: kind,
 	}, nil
+}
+
+func playerStatsLooksPlaceholder(stats *PlayerStatistics, resolved *ResolvedDocument) bool {
+	if stats == nil {
+		return true
+	}
+	if hasMeaningfulStatValues(stats.Categories) {
+		return false
+	}
+
+	playerRefID := strings.TrimSpace(refIDs(stats.PlayerRef)["athleteId"])
+	if playerRefID == "" {
+		return true
+	}
+	if strings.Contains(strings.TrimSpace(stats.Ref), "/athletes//statistics") {
+		return true
+	}
+	if resolved != nil && strings.Contains(strings.TrimSpace(resolved.CanonicalRef), "/athletes//statistics") {
+		return true
+	}
+	return false
+}
+
+func hasMeaningfulStatValues(categories []StatCategory) bool {
+	for _, category := range categories {
+		for _, stat := range category.Stats {
+			display := strings.TrimSpace(stat.DisplayValue)
+			if display != "" && display != "-" && display != "0" && display != "0.0" && display != "0.00" {
+				return true
+			}
+			if statAsFloat(stat) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *PlayerService) fallbackPlayerStatsFromMatchContext(
+	ctx context.Context,
+	lookup *playerLookup,
+	opts PlayerLookupOptions,
+) (*ResolvedDocument, *PlayerStatistics, []string, bool) {
+	if lookup == nil || s == nil || s.resolver == nil {
+		return nil, nil, nil, false
+	}
+
+	warnings := make([]string, 0)
+	matchHelper := &MatchService{client: s.client, resolver: s.resolver}
+	candidateIDs := compactWarnings([]string{
+		strings.TrimSpace(lookup.player.ID),
+		strings.TrimSpace(lookup.entity.ID),
+		strings.TrimSpace(refIDs(lookup.player.Ref)["athleteId"]),
+	})
+	candidateNames := compactWarnings([]string{
+		strings.TrimSpace(lookup.player.DisplayName),
+		strings.TrimSpace(lookup.player.FullName),
+		strings.TrimSpace(lookup.player.Name),
+		strings.TrimSpace(lookup.player.BattingName),
+		strings.TrimSpace(lookup.player.FieldingName),
+		strings.TrimSpace(lookup.entity.Name),
+		strings.TrimSpace(lookup.entity.ShortName),
+	})
+	playerQuery := nonEmpty(
+		strings.TrimSpace(lookup.player.ID),
+		strings.TrimSpace(lookup.player.DisplayName),
+		strings.TrimSpace(lookup.player.FullName),
+		strings.TrimSpace(lookup.player.BattingName),
+		strings.TrimSpace(lookup.player.FieldingName),
+		strings.TrimSpace(lookup.entity.Name),
+	)
+	seenMatch := map[string]struct{}{}
+	candidateMatches := make([]Match, 0, 40)
+	appendCandidateMatch := func(match Match) {
+		key := nonEmpty(strings.TrimSpace(match.ID), strings.TrimSpace(match.Ref))
+		if key == "" {
+			return
+		}
+		if _, ok := seenMatch[key]; ok {
+			return
+		}
+		seenMatch[key] = struct{}{}
+		candidateMatches = append(candidateMatches, match)
+	}
+
+	appendMatchesFromListResult := func(result NormalizedResult, source string) {
+		if result.Status == ResultStatusError {
+			if strings.TrimSpace(result.Message) != "" {
+				warnings = append(warnings, fmt.Sprintf("%s match-context source failed: %s", source, result.Message))
+			}
+			return
+		}
+		warnings = append(warnings, result.Warnings...)
+		for _, item := range result.Items {
+			switch typed := item.(type) {
+			case Match:
+				appendCandidateMatch(typed)
+			case *Match:
+				if typed != nil {
+					appendCandidateMatch(*typed)
+				}
+			}
+		}
+	}
+
+	liveResult, liveErr := matchHelper.Live(ctx, MatchListOptions{
+		Limit:    24,
+		LeagueID: strings.TrimSpace(opts.LeagueID),
+	})
+	if liveErr != nil {
+		warnings = append(warnings, fmt.Sprintf("match-context live source failed: %v", liveErr))
+	} else {
+		appendMatchesFromListResult(liveResult, "live")
+	}
+
+	listResult, listErr := matchHelper.List(ctx, MatchListOptions{
+		Limit:    36,
+		LeagueID: strings.TrimSpace(opts.LeagueID),
+	})
+	if listErr != nil {
+		warnings = append(warnings, fmt.Sprintf("match-context list source failed: %v", listErr))
+	} else {
+		appendMatchesFromListResult(listResult, "list")
+	}
+
+	if len(candidateMatches) == 0 {
+		matchSearch, err := s.resolver.Search(ctx, EntityMatch, "", ResolveOptions{
+			Limit:    24,
+			LeagueID: strings.TrimSpace(opts.LeagueID),
+		})
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("match-context fallback unavailable: %v", err))
+			return nil, nil, compactWarnings(warnings), false
+		}
+		warnings = append(warnings, matchSearch.Warnings...)
+
+		for _, entity := range matchSearch.Entities {
+			ref := buildMatchRef(entity)
+			if ref == "" {
+				continue
+			}
+			matchResolved, matchErr := matchHelper.resolveRefChainResilient(ctx, ref)
+			if matchErr != nil {
+				warnings = append(warnings, fmt.Sprintf("match %s: %v", ref, matchErr))
+				continue
+			}
+			match, normalizeErr := NormalizeMatch(matchResolved.Body)
+			if normalizeErr != nil {
+				warnings = append(warnings, fmt.Sprintf("match %s: %v", matchResolved.CanonicalRef, normalizeErr))
+				continue
+			}
+			appendCandidateMatch(*match)
+		}
+	}
+
+	if len(candidateMatches) == 0 {
+		warnings = append(warnings, "match-context fallback found no recent matches")
+		return nil, nil, compactWarnings(warnings), false
+	}
+
+	for _, match := range candidateMatches {
+		team, roster, routeWarnings, found := s.findPlayerRosterEntry(ctx, match, playerQuery, candidateIDs, candidateNames)
+		warnings = append(warnings, routeWarnings...)
+		if !found {
+			continue
+		}
+
+		team = s.enrichTeamIdentityFromIndex(team)
+		roster = s.enrichRosterEntryFromIndex(roster)
+		statsRef := rosterPlayerStatisticsRef(match, team, roster)
+		if statsRef == "" {
+			warnings = append(warnings, fmt.Sprintf("match %s has no roster statistics route for player %s", match.ID, nonEmpty(roster.PlayerID, lookup.player.ID)))
+			continue
+		}
+
+		statsResolved, categories, statsErr := s.fetchStatCategories(ctx, statsRef)
+		if statsErr != nil {
+			warnings = append(warnings, fmt.Sprintf("player statistics %s: %v", statsRef, statsErr))
+			continue
+		}
+		if !hasMeaningfulStatValues(categories) {
+			warnings = append(warnings, fmt.Sprintf("player statistics %s returned no meaningful values", statsResolved.CanonicalRef))
+			continue
+		}
+
+		playerID := nonEmpty(strings.TrimSpace(lookup.player.ID), strings.TrimSpace(lookup.entity.ID), strings.TrimSpace(roster.PlayerID))
+		playerRef := nonEmpty(strings.TrimSpace(lookup.player.Ref), strings.TrimSpace(roster.PlayerRef))
+		stats := &PlayerStatistics{
+			Ref:          statsResolved.CanonicalRef,
+			PlayerID:     playerID,
+			PlayerRef:    playerRef,
+			SplitID:      "match-context",
+			Name:         "Match Context",
+			Abbreviation: "LIVE",
+			Categories:   categories,
+			Extensions: map[string]any{
+				"source":        "match-context-fallback",
+				"matchId":       strings.TrimSpace(match.ID),
+				"teamId":        strings.TrimSpace(team.ID),
+				"teamName":      teamDisplayLabel(team),
+				"statisticsRef": strings.TrimSpace(statsResolved.CanonicalRef),
+			},
+		}
+		return statsResolved, stats, compactWarnings(warnings), true
+	}
+
+	return nil, nil, compactWarnings(warnings), false
 }
 
 func (s *PlayerService) enrichPlayerProfile(ctx context.Context, player *Player) {

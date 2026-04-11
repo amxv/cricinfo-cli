@@ -463,11 +463,36 @@ func (s *MatchService) LiveView(ctx context.Context, query string, opts MatchLoo
 
 	live, liveWarnings := s.buildLiveView(ctx, *lookup.match)
 	if live == nil {
-		return NormalizedResult{
+		fallback, fallbackErr := s.Situation(ctx, query, opts)
+		if fallbackErr == nil && fallback.Status != ResultStatusError {
+			combinedWarnings := append([]string{}, fallback.Warnings...)
+			combinedWarnings = append(combinedWarnings, lookup.warnings...)
+			combinedWarnings = append(combinedWarnings, hydrationWarnings...)
+			combinedWarnings = append(combinedWarnings, liveWarnings...)
+			combinedWarnings = append(combinedWarnings, "live-view fallback: showing situation data")
+			combinedWarnings = compactWarnings(combinedWarnings)
+
+			if fallback.Data != nil && len(combinedWarnings) > 0 {
+				partial := NewPartialResult(EntityMatchSituation, fallback.Data, combinedWarnings...)
+				partial.RequestedRef = nonEmpty(fallback.RequestedRef, lookup.resolved.RequestedRef)
+				partial.CanonicalRef = nonEmpty(fallback.CanonicalRef, lookup.resolved.CanonicalRef)
+				return partial, nil
+			}
+			return fallback, nil
+		}
+
+		result := NormalizedResult{
 			Kind:    EntityMatchSituation,
 			Status:  ResultStatusEmpty,
 			Message: fmt.Sprintf("no live view data available for match %q", lookup.match.ID),
-		}, nil
+		}
+		warnings := compactWarnings(append(append(append([]string{}, lookup.warnings...), hydrationWarnings...), liveWarnings...))
+		if len(warnings) > 0 {
+			result.Status = ResultStatusPartial
+			result.Message = "live view unavailable"
+			result.Warnings = warnings
+		}
+		return result, nil
 	}
 
 	situation := &MatchSituation{
@@ -1196,7 +1221,7 @@ func (s *MatchService) resolveMatchLookup(ctx context.Context, query string, opt
 		return nil, &result
 	}
 
-	resolved, err := s.client.ResolveRefChain(ctx, ref)
+	resolved, err := s.resolveRefChainResilient(ctx, ref)
 	if err != nil {
 		result := NewTransportErrorResult(EntityMatch, ref, err)
 		return nil, &result

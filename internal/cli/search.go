@@ -95,6 +95,13 @@ func newSearchEntityCommand(name string, kind cricinfo.EntityKind, global *globa
 			for _, entity := range searchResult.Entities {
 				items = append(items, entity.ToRenderable())
 			}
+			if kind == cricinfo.EntityMatch && len(items) == 0 && query != "" {
+				fallbackItems, fallbackWarnings := fallbackMatchSearchItems(cmd.Context(), query, searchOpts.leagueID, searchOpts.limit)
+				if len(fallbackItems) > 0 {
+					items = fallbackItems
+				}
+				searchResult.Warnings = append(searchResult.Warnings, fallbackWarnings...)
+			}
 
 			result := cricinfo.NewListResult(kind, items)
 			if len(searchResult.Warnings) > 0 {
@@ -116,4 +123,153 @@ func newSearchEntityCommand(name string, kind cricinfo.EntityKind, global *globa
 	}
 
 	return command
+}
+
+func fallbackMatchSearchItems(ctx context.Context, query string, leagueID string, limit int) ([]any, []string) {
+	service, err := cricinfo.NewMatchService(cricinfo.MatchServiceConfig{})
+	if err != nil {
+		return nil, []string{fmt.Sprintf("match fallback init failed: %v", err)}
+	}
+	defer func() {
+		_ = service.Close()
+	}()
+
+	listLimit := limit
+	if listLimit < 20 {
+		listLimit = 20
+	}
+	if listLimit > 80 {
+		listLimit = 80
+	}
+
+	result, err := service.Live(ctx, cricinfo.MatchListOptions{Limit: listLimit, LeagueID: strings.TrimSpace(leagueID)})
+	if err != nil {
+		return nil, []string{fmt.Sprintf("match fallback live list failed: %v", err)}
+	}
+	if len(result.Items) == 0 {
+		result, err = service.List(ctx, cricinfo.MatchListOptions{Limit: listLimit, LeagueID: strings.TrimSpace(leagueID)})
+		if err != nil {
+			return nil, []string{fmt.Sprintf("match fallback list failed: %v", err)}
+		}
+	}
+
+	queryNorm := normalizeMatchSearchText(query)
+	queryTokens := strings.Fields(queryNorm)
+	if queryNorm == "" {
+		return nil, nil
+	}
+
+	items := make([]any, 0, limitOrDefault(limit, 10))
+	for _, raw := range result.Items {
+		match, ok := raw.(cricinfo.Match)
+		if !ok {
+			continue
+		}
+		if matchSearchScore(match, queryNorm, queryTokens) == 0 {
+			continue
+		}
+		items = append(items, match)
+		if len(items) >= limitOrDefault(limit, 10) {
+			break
+		}
+	}
+
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return items, []string{"match search fallback used list/live aliases"}
+}
+
+func matchSearchScore(match cricinfo.Match, query string, queryTokens []string) int {
+	score := 0
+	for _, value := range []string{
+		match.ID,
+		match.Description,
+		match.ShortDescription,
+		match.Note,
+		match.ScoreSummary,
+	} {
+		score = maxInt(score, aliasScore(normalizeMatchSearchText(value), query, queryTokens))
+	}
+	for _, team := range match.Teams {
+		for _, value := range []string{
+			team.ID,
+			team.Name,
+			team.ShortName,
+			team.Abbreviation,
+		} {
+			score = maxInt(score, aliasScore(normalizeMatchSearchText(value), query, queryTokens))
+		}
+	}
+	return score
+}
+
+func aliasScore(alias, query string, queryTokens []string) int {
+	if alias == "" || query == "" {
+		return 0
+	}
+	if alias == query {
+		return 1000
+	}
+	if strings.HasPrefix(alias, query) {
+		return 800
+	}
+	if strings.Contains(alias, query) {
+		return 650
+	}
+	aliasTokens := strings.Fields(alias)
+	if len(aliasTokens) == 0 || len(queryTokens) == 0 {
+		return 0
+	}
+	matched := 0
+	for _, queryToken := range queryTokens {
+		for _, aliasToken := range aliasTokens {
+			if aliasToken == queryToken || strings.HasPrefix(aliasToken, queryToken) || (len(aliasToken) >= 2 && strings.HasPrefix(queryToken, aliasToken)) {
+				matched++
+				break
+			}
+		}
+	}
+	if matched == 0 {
+		return 0
+	}
+	return 300 + (matched * 60)
+}
+
+func normalizeMatchSearchText(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		return ""
+	}
+	var builder strings.Builder
+	lastSpace := false
+	for _, r := range raw {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+			lastSpace = false
+			continue
+		}
+		if !lastSpace {
+			builder.WriteRune(' ')
+			lastSpace = true
+		}
+	}
+	return strings.Join(strings.Fields(builder.String()), " ")
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func limitOrDefault(value int, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	if fallback <= 0 {
+		return 10
+	}
+	return fallback
 }

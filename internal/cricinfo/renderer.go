@@ -302,8 +302,35 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 		return writeTextLines(w, lines)
 	}
 
+	if result.Kind == EntityTeamStatistics || result.Kind == EntityTeamRecords {
+		title := "Team Statistics"
+		if result.Kind == EntityTeamRecords {
+			title = "Team Records"
+		}
+		lines = append(lines, fmt.Sprintf("%s Categories (%d)", title, len(result.Items)))
+		lines = append(lines, formatStatCategoryList(result.Items)...)
+		return writeTextLines(w, lines)
+	}
+
+	if result.Kind == EntityStandingsGroup {
+		lines = append(lines, formatStandingsGroupList(result.Items)...)
+		return writeTextLines(w, lines)
+	}
+
 	if result.Kind == EntityDeliveryEvent || result.Kind == EntityPlayerDelivery {
 		lines = append(lines, fmt.Sprintf("%s (%d)", titleize(kindPlural(result.Kind)), len(result.Items)))
+		if result.Kind == EntityDeliveryEvent {
+			source := ""
+			switch {
+			case strings.Contains(result.RequestedRef, "/details"):
+				source = "details"
+			case strings.Contains(result.RequestedRef, "/plays"):
+				source = "plays"
+			}
+			if source != "" {
+				lines = append(lines, "Source: "+source)
+			}
+		}
 		for i, item := range result.Items {
 			summary := summarizeDeliveryListItem(item, result.Kind)
 			if strings.TrimSpace(summary) == "" {
@@ -458,6 +485,25 @@ func toMap(value any, allFields bool) (map[string]any, error) {
 		return nil, fmt.Errorf("render item is not an object")
 	}
 	return mapped, nil
+}
+
+func mapFromAny(value any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	if mapped, ok := value.(map[string]any); ok {
+		return mapped
+	}
+
+	blob, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var mapped map[string]any
+	if err := json.Unmarshal(blob, &mapped); err != nil {
+		return nil
+	}
+	return mapped
 }
 
 func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) string {
@@ -969,7 +1015,7 @@ func formatPlayerProfile(entity map[string]any) []string {
 }
 
 func formatPlayerMatchView(entity map[string]any) []string {
-	lines := make([]string, 0, 16)
+	lines := make([]string, 0, 48)
 	if player := valueString(entity, "playerName"); player != "" {
 		lines = append(lines, "Player: "+player)
 	}
@@ -985,13 +1031,21 @@ func formatPlayerMatchView(entity map[string]any) []string {
 		}
 	}
 	if batting := sliceValue(entity, "batting"); len(batting) > 0 {
-		lines = append(lines, fmt.Sprintf("Batting Categories: %d", len(batting)))
+		lines = append(lines, "Batting")
+		lines = append(lines, formatStatCategoryList(batting)...)
 	}
 	if bowling := sliceValue(entity, "bowling"); len(bowling) > 0 {
-		lines = append(lines, fmt.Sprintf("Bowling Categories: %d", len(bowling)))
+		lines = append(lines, "Bowling")
+		lines = append(lines, formatStatCategoryList(bowling)...)
 	}
 	if fielding := sliceValue(entity, "fielding"); len(fielding) > 0 {
-		lines = append(lines, fmt.Sprintf("Fielding Categories: %d", len(fielding)))
+		lines = append(lines, "Fielding")
+		lines = append(lines, formatStatCategoryList(fielding)...)
+	}
+	if len(sliceValue(entity, "batting")) == 0 &&
+		len(sliceValue(entity, "bowling")) == 0 &&
+		len(sliceValue(entity, "fielding")) == 0 {
+		lines = append(lines, "No match statistics categories available.")
 	}
 	return lines
 }
@@ -1476,6 +1530,149 @@ func formatTeamLeaders(entity map[string]any) []string {
 	}
 
 	return lines
+}
+
+func formatStatCategoryList(items []any) []string {
+	lines := make([]string, 0, len(items)*4)
+	for i, rawCategory := range items {
+		category := mapFromAny(rawCategory)
+		if category == nil {
+			continue
+		}
+
+		categoryName := firstNonEmpty(valueString(category, "displayName"), valueString(category, "name"), "Category")
+		lines = append(lines, fmt.Sprintf("  %d. %s", i+1, categoryName))
+
+		stats := sliceValue(category, "stats")
+		if len(stats) == 0 {
+			continue
+		}
+
+		limit := len(stats)
+		if limit > 16 {
+			limit = 16
+		}
+		for j := 0; j < limit; j++ {
+			statMap, ok := stats[j].(map[string]any)
+			if !ok {
+				continue
+			}
+			label := firstNonEmpty(valueString(statMap, "displayName"), valueString(statMap, "name"), valueString(statMap, "abbreviation"))
+			value := firstNonEmpty(valueString(statMap, "displayValue"), valueString(statMap, "value"))
+			row := joinParts(label, value, bracket(valueString(statMap, "abbreviation")))
+			if row == "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("     - %s", row))
+		}
+		if len(stats) > limit {
+			lines = append(lines, fmt.Sprintf("     - ... %d more", len(stats)-limit))
+		}
+	}
+	return lines
+}
+
+func formatStandingsGroupList(items []any) []string {
+	lines := make([]string, 0, len(items)*8+1)
+	lines = append(lines, fmt.Sprintf("Standings Groups (%d)", len(items)))
+
+	for i, rawGroup := range items {
+		group := mapFromAny(rawGroup)
+		if group == nil {
+			continue
+		}
+
+		groupID := firstNonEmpty(valueString(group, "groupId"), valueString(group, "id"), fmt.Sprintf("%d", i+1))
+		seasonID := valueString(group, "seasonId")
+		header := "Group " + groupID
+		if seasonID != "" {
+			header = joinParts(header, "Season "+seasonID)
+		}
+		lines = append(lines, header)
+
+		entries := sliceValue(group, "entries")
+		if len(entries) == 0 {
+			lines = append(lines, "  No standings entries available.")
+			continue
+		}
+
+		for entryIndex, rawEntry := range entries {
+			team := mapFromAny(rawEntry)
+			if team == nil {
+				continue
+			}
+
+			rank := standingsStatValueFromTeam(team, "rank", "position")
+			if rank == "" {
+				rank = fmt.Sprintf("%d", entryIndex+1)
+			}
+			teamName := firstNonEmpty(valueString(team, "shortName"), valueString(team, "name"), valueString(team, "id"))
+			played := standingsStatValueFromTeam(team, "matchesplayed", "played", "matches")
+			won := standingsStatValueFromTeam(team, "wins", "won")
+			lost := standingsStatValueFromTeam(team, "losses", "lost")
+			points := standingsStatValueFromTeam(team, "matchpoints", "points", "pts")
+			nrr := standingsStatValueFromTeam(team, "netrunrate", "nrr", "runrate")
+
+			row := joinParts(
+				fmt.Sprintf("#%s %s", rank, teamName),
+				nonEmptyLabel("P", played),
+				nonEmptyLabel("W", won),
+				nonEmptyLabel("L", lost),
+				nonEmptyLabel("Pts", points),
+				nonEmptyLabel("NRR", nrr),
+			)
+			if strings.TrimSpace(row) == "" {
+				row = joinParts(fmt.Sprintf("#%s %s", rank, teamName), valueString(team, "scoreSummary"))
+			}
+			lines = append(lines, "  "+row)
+		}
+	}
+	return lines
+}
+
+func standingsStatValueFromTeam(team map[string]any, names ...string) string {
+	if len(names) == 0 || team == nil {
+		return ""
+	}
+
+	targets := map[string]struct{}{}
+	for _, name := range names {
+		key := normalizeStatName(name)
+		if key != "" {
+			targets[key] = struct{}{}
+		}
+	}
+
+	extensions, ok := team["extensions"].(map[string]any)
+	if !ok || extensions == nil {
+		return ""
+	}
+	records, ok := extensions["records"].([]any)
+	if !ok || len(records) == 0 {
+		return ""
+	}
+
+	for _, rawRecord := range records {
+		record := mapFromAny(rawRecord)
+		if record == nil {
+			continue
+		}
+		for _, rawStat := range sliceValue(record, "stats") {
+			stat := mapFromAny(rawStat)
+			if stat == nil {
+				continue
+			}
+			nameKey := normalizeStatName(firstNonEmpty(valueString(stat, "name"), valueString(stat, "type")))
+			if _, ok := targets[nameKey]; !ok {
+				continue
+			}
+			value := firstNonEmpty(valueString(stat, "displayValue"), valueString(stat, "value"))
+			if value != "" {
+				return value
+			}
+		}
+	}
+	return ""
 }
 
 func formatAnalysisView(entity map[string]any) []string {

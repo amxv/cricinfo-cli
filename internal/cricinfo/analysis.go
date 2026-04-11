@@ -19,6 +19,7 @@ const (
 	analysisMetricSixesConceded = "sixes-conceded"
 	analysisMetricFours         = "fours"
 	analysisMetricSixes         = "sixes"
+	analysisMetricRuns          = "runs"
 	analysisMetricStrikeRate    = "strike-rate"
 )
 
@@ -646,6 +647,9 @@ func (s *AnalysisService) Batting(ctx context.Context, opts AnalysisMetricOption
 		case analysisMetricSixes:
 			row.Value = float64(entry.battingSixes)
 			row.Count = entry.battingSixes
+		case analysisMetricRuns:
+			row.Value = float64(entry.runsScored)
+			row.Count = entry.runsScored
 		case analysisMetricStrikeRate:
 			row.Value = strikeRateFromAggregate(entry)
 		}
@@ -1098,10 +1102,10 @@ func normalizeBattingMetric(raw string) (string, error) {
 	metric = strings.ReplaceAll(metric, "_", "-")
 	metric = strings.ReplaceAll(metric, " ", "-")
 	switch metric {
-	case analysisMetricFours, analysisMetricSixes, analysisMetricStrikeRate:
+	case analysisMetricFours, analysisMetricSixes, analysisMetricRuns, analysisMetricStrikeRate:
 		return metric, nil
 	default:
-		return "", fmt.Errorf("--metric must be one of: fours, sixes, strike-rate")
+		return "", fmt.Errorf("--metric must be one of: fours, sixes, runs, strike-rate")
 	}
 }
 
