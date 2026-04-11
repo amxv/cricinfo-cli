@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -133,6 +134,8 @@ type HistoricalScopeSession struct {
 	partnershipWarnByMatch map[string][]string
 
 	metrics HydrationMetrics
+
+	resolveMu sync.Mutex
 }
 
 func newHistoricalScopeSession(client *Client, resolver *Resolver, opts HistoricalScopeOptions) *HistoricalScopeSession {
@@ -292,52 +295,78 @@ func (s *HistoricalScopeSession) HydratePlayerMatchSummaries(ctx context.Context
 			continue
 		}
 
-		for _, entry := range entries {
-			playerID := strings.TrimSpace(entry.PlayerID)
-			if playerID == "" {
+		type playerHydrationResult struct {
+			item    *PlayerMatch
+			warning string
+		}
+		results := make([]playerHydrationResult, len(entries))
+		sem := make(chan struct{}, detailSubresourceFetchConcurrency)
+		var wg sync.WaitGroup
+		for i, entry := range entries {
+			wg.Add(1)
+			go func(index int, entry TeamRosterEntry, team Team) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				playerID := strings.TrimSpace(entry.PlayerID)
+				if playerID == "" {
+					return
+				}
+				if strings.TrimSpace(entry.DisplayName) == "" && s.resolver != nil {
+					_ = s.resolver.seedPlayerByID(ctx, playerID, match.LeagueID, match.ID)
+				}
+				entry = s.enrichRosterEntryFromIndex(entry)
+
+				statsRef := rosterPlayerStatisticsRef(match, team, entry)
+				if statsRef == "" {
+					results[index] = playerHydrationResult{warning: fmt.Sprintf("player %s has no match statistics route", playerID)}
+					return
+				}
+
+				statsDoc, err := s.resolve(ctx, statsRef)
+				if err != nil {
+					results[index] = playerHydrationResult{warning: fmt.Sprintf("player statistics %s: %v", statsRef, err)}
+					return
+				}
+
+				categories, err := NormalizeStatCategories(statsDoc.Body)
+				if err != nil {
+					results[index] = playerHydrationResult{warning: fmt.Sprintf("player statistics %s: %v", statsDoc.CanonicalRef, err)}
+					return
+				}
+
+				batting, bowling, fielding := splitPlayerStatCategories(categories)
+				playerMatch := PlayerMatch{
+					PlayerID:      playerID,
+					PlayerRef:     entry.PlayerRef,
+					PlayerName:    nonEmpty(entry.DisplayName, "Unknown Player"),
+					MatchID:       match.ID,
+					CompetitionID: nonEmpty(match.CompetitionID, match.ID),
+					EventID:       match.EventID,
+					LeagueID:      match.LeagueID,
+					TeamID:        team.ID,
+					TeamName:      nonEmpty(team.ShortName, team.Name, "Unknown Team"),
+					StatisticsRef: statsDoc.CanonicalRef,
+					LinescoresRef: rosterPlayerLinescoresRef(match, team, entry),
+					Batting:       batting,
+					Bowling:       bowling,
+					Fielding:      fielding,
+					Summary:       summarizePlayerMatchCategories(categories),
+				}
+				results[index] = playerHydrationResult{item: &playerMatch}
+			}(i, entry, team)
+		}
+		wg.Wait()
+
+		for _, result := range results {
+			if strings.TrimSpace(result.warning) != "" {
+				warnings = append(warnings, result.warning)
 				continue
 			}
-			if strings.TrimSpace(entry.DisplayName) == "" && s.resolver != nil {
-				_ = s.resolver.seedPlayerByID(ctx, playerID, match.LeagueID, match.ID)
+			if result.item != nil {
+				items = append(items, *result.item)
 			}
-			entry = s.enrichRosterEntryFromIndex(entry)
-
-			statsRef := rosterPlayerStatisticsRef(match, team, entry)
-			if statsRef == "" {
-				warnings = append(warnings, fmt.Sprintf("player %s has no match statistics route", playerID))
-				continue
-			}
-
-			statsDoc, err := s.resolve(ctx, statsRef)
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("player statistics %s: %v", statsRef, err))
-				continue
-			}
-
-			categories, err := NormalizeStatCategories(statsDoc.Body)
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("player statistics %s: %v", statsDoc.CanonicalRef, err))
-				continue
-			}
-
-			batting, bowling, fielding := splitPlayerStatCategories(categories)
-			items = append(items, PlayerMatch{
-				PlayerID:      playerID,
-				PlayerRef:     entry.PlayerRef,
-				PlayerName:    nonEmpty(entry.DisplayName, "Unknown Player"),
-				MatchID:       match.ID,
-				CompetitionID: nonEmpty(match.CompetitionID, match.ID),
-				EventID:       match.EventID,
-				LeagueID:      match.LeagueID,
-				TeamID:        team.ID,
-				TeamName:      nonEmpty(team.ShortName, team.Name, "Unknown Team"),
-				StatisticsRef: statsDoc.CanonicalRef,
-				LinescoresRef: rosterPlayerLinescoresRef(match, team, entry),
-				Batting:       batting,
-				Bowling:       bowling,
-				Fielding:      fielding,
-				Summary:       summarizePlayerMatchCategories(categories),
-			})
 		}
 	}
 
@@ -1397,23 +1426,34 @@ func (s *HistoricalScopeSession) resolve(ctx context.Context, ref string) (*Reso
 		return nil, fmt.Errorf("ref is empty")
 	}
 
+	s.resolveMu.Lock()
 	if cached, ok := s.resolvedDocs[ref]; ok {
 		s.metrics.ResolveCacheHits++
+		s.resolveMu.Unlock()
 		return cached, nil
 	}
+	s.resolveMu.Unlock()
 
 	resolved, err := s.client.ResolveRefChain(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	s.metrics.ResolveCacheMisses++
 
 	copied := *resolved
 	pointer := &copied
 	keys := compactWarnings([]string{ref, copied.RequestedRef, copied.CanonicalRef})
+
+	s.resolveMu.Lock()
+	if cached, ok := s.resolvedDocs[ref]; ok {
+		s.metrics.ResolveCacheHits++
+		s.resolveMu.Unlock()
+		return cached, nil
+	}
+	s.metrics.ResolveCacheMisses++
 	for _, key := range keys {
 		s.resolvedDocs[key] = pointer
 	}
+	s.resolveMu.Unlock()
 	return pointer, nil
 }
 

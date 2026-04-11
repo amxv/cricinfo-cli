@@ -13,7 +13,7 @@ import (
 )
 
 const defaultMatchListLimit = 20
-const deliveryFetchConcurrency = 48
+const deliveryFetchConcurrency = 96
 const detailSubresourceFetchConcurrency = 24
 const detailItemFetchTimeout = 3 * time.Second
 const matchTeamQueryScanRange = 6
@@ -1510,25 +1510,55 @@ func (s *MatchService) resolvePageRefs(ctx context.Context, first *ResolvedDocum
 		return items, nil, nil
 	}
 
-	warnings := make([]string, 0)
+	type pageLoadResult struct {
+		page    int
+		items   []Ref
+		warning string
+	}
+
+	results := make([]pageLoadResult, page.PageCount+1)
+	sem := make(chan struct{}, detailSubresourceFetchConcurrency)
+	var wg sync.WaitGroup
 	baseRef := firstNonEmptyString(first.CanonicalRef, first.RequestedRef)
 	for pageIndex := 2; pageIndex <= page.PageCount; pageIndex++ {
-		pageRef := pagedRef(baseRef, pageIndex)
-		if pageRef == "" {
-			warnings = append(warnings, fmt.Sprintf("page %d unavailable for %s", pageIndex, baseRef))
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			pageRef := pagedRef(baseRef, index)
+			if pageRef == "" {
+				results[index] = pageLoadResult{page: index, warning: fmt.Sprintf("page %d unavailable for %s", index, baseRef)}
+				return
+			}
+
+			pageDoc, pageErr := s.resolveRefChainResilient(ctx, pageRef)
+			if pageErr != nil {
+				results[index] = pageLoadResult{page: index, warning: fmt.Sprintf("page %d %s: %v", index, pageRef, pageErr)}
+				return
+			}
+
+			nextPage, decodeErr := DecodePage[Ref](pageDoc.Body)
+			if decodeErr != nil {
+				results[index] = pageLoadResult{page: index, warning: fmt.Sprintf("page %d %s: %v", index, pageDoc.CanonicalRef, decodeErr)}
+				return
+			}
+			results[index] = pageLoadResult{page: index, items: nextPage.Items}
+		}(pageIndex)
+	}
+	wg.Wait()
+
+	warnings := make([]string, 0)
+	for pageIndex := 2; pageIndex <= page.PageCount; pageIndex++ {
+		result := results[pageIndex]
+		if strings.TrimSpace(result.warning) != "" {
+			warnings = append(warnings, result.warning)
 			continue
 		}
-		pageDoc, pageErr := s.resolveRefChainResilient(ctx, pageRef)
-		if pageErr != nil {
-			warnings = append(warnings, fmt.Sprintf("page %d %s: %v", pageIndex, pageRef, pageErr))
-			continue
+		if len(result.items) > 0 {
+			items = append(items, result.items...)
 		}
-		nextPage, decodeErr := DecodePage[Ref](pageDoc.Body)
-		if decodeErr != nil {
-			warnings = append(warnings, fmt.Sprintf("page %d %s: %v", pageIndex, pageDoc.CanonicalRef, decodeErr))
-			continue
-		}
-		items = append(items, nextPage.Items...)
 	}
 
 	return items, compactWarnings(warnings), nil

@@ -467,54 +467,62 @@ func (s *AnalysisService) Batting(ctx context.Context, opts AnalysisMetricOption
 
 	agg := map[string]*analysisAggregate{}
 	warnings := append([]string{}, run.warnings...)
-	for _, match := range run.session.ScopedMatches() {
-		seasonID := seasonForMatch(match, run.seasonHint)
-		players, playerWarnings, hydrateErr := run.session.HydratePlayerMatchSummaries(ctx, match.ID)
-		if hydrateErr != nil {
-			if statusErr := analysisTransportResult(EntityAnalysisBat, match.ID, hydrateErr); statusErr != nil {
-				return *statusErr, nil
-			}
-			warnings = append(warnings, fmt.Sprintf("match %s player summary: %v", match.ID, hydrateErr))
-			continue
+	if run.mode == analysisScopeMatch {
+		if fastAgg, fastWarnings, used := s.hydrateMatchScopeBattingFromScorecard(ctx, run, filters, groupBy); used {
+			agg = fastAgg
+			warnings = append(warnings, fastWarnings...)
 		}
-		warnings = append(warnings, playerWarnings...)
-
-		for _, player := range players {
-			totals := extractBattingTotals(player)
-			playerName := analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName)
-			teamName := analysisDisplayTeamName(s.resolver, player.TeamID, player.TeamName)
-			row := analysisSourceRow{
-				MatchID:      strings.TrimSpace(player.MatchID),
-				LeagueID:     strings.TrimSpace(player.LeagueID),
-				SeasonID:     seasonID,
-				TeamID:       strings.TrimSpace(player.TeamID),
-				TeamName:     strings.TrimSpace(teamName),
-				PlayerID:     strings.TrimSpace(player.PlayerID),
-				PlayerName:   strings.TrimSpace(playerName),
-				CountValue:   1,
-				Fours:        totals.fours,
-				BattingSixes: totals.sixes,
-				RunsScored:   totals.runs,
-				BallsFaced:   totals.balls,
-				StrikeSample: totals.strikeRate,
-			}
-			if !filters.matches(row) {
+	}
+	if len(agg) == 0 {
+		for _, match := range run.session.ScopedMatches() {
+			seasonID := seasonForMatch(match, run.seasonHint)
+			players, playerWarnings, hydrateErr := run.session.HydratePlayerMatchSummaries(ctx, match.ID)
+			if hydrateErr != nil {
+				if statusErr := analysisTransportResult(EntityAnalysisBat, match.ID, hydrateErr); statusErr != nil {
+					return *statusErr, nil
+				}
+				warnings = append(warnings, fmt.Sprintf("match %s player summary: %v", match.ID, hydrateErr))
 				continue
 			}
-			key, dims := buildAnalysisGroup(row, groupBy)
-			entry := agg[key]
-			if entry == nil {
-				entry = &analysisAggregate{row: dims, matchIDs: map[string]struct{}{}}
-				agg[key] = entry
-			}
-			entry.matchIDs[row.MatchID] = struct{}{}
-			entry.fours += row.Fours
-			entry.battingSixes += row.BattingSixes
-			entry.runsScored += row.RunsScored
-			entry.ballsFaced += row.BallsFaced
-			if row.StrikeSample > 0 {
-				entry.strikeRateTotal += row.StrikeSample
-				entry.strikeRateCount++
+			warnings = append(warnings, playerWarnings...)
+
+			for _, player := range players {
+				totals := extractBattingTotals(player)
+				playerName := analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName)
+				teamName := analysisDisplayTeamName(s.resolver, player.TeamID, player.TeamName)
+				row := analysisSourceRow{
+					MatchID:      strings.TrimSpace(player.MatchID),
+					LeagueID:     strings.TrimSpace(player.LeagueID),
+					SeasonID:     seasonID,
+					TeamID:       strings.TrimSpace(player.TeamID),
+					TeamName:     strings.TrimSpace(teamName),
+					PlayerID:     strings.TrimSpace(player.PlayerID),
+					PlayerName:   strings.TrimSpace(playerName),
+					CountValue:   1,
+					Fours:        totals.fours,
+					BattingSixes: totals.sixes,
+					RunsScored:   totals.runs,
+					BallsFaced:   totals.balls,
+					StrikeSample: totals.strikeRate,
+				}
+				if !filters.matches(row) {
+					continue
+				}
+				key, dims := buildAnalysisGroup(row, groupBy)
+				entry := agg[key]
+				if entry == nil {
+					entry = &analysisAggregate{row: dims, matchIDs: map[string]struct{}{}}
+					agg[key] = entry
+				}
+				entry.matchIDs[row.MatchID] = struct{}{}
+				entry.fours += row.Fours
+				entry.battingSixes += row.BattingSixes
+				entry.runsScored += row.RunsScored
+				entry.ballsFaced += row.BallsFaced
+				if row.StrikeSample > 0 {
+					entry.strikeRateTotal += row.StrikeSample
+					entry.strikeRateCount++
+				}
 			}
 		}
 	}
@@ -557,6 +565,133 @@ func (s *AnalysisService) Batting(ctx context.Context, opts AnalysisMetricOption
 		Rows:    rows,
 	}
 	return analysisResult(EntityAnalysisBat, view, warnings), nil
+}
+
+func (s *AnalysisService) hydrateMatchScopeBattingFromScorecard(
+	ctx context.Context,
+	run *analysisScopeRun,
+	filters analysisFilterSpec,
+	groupBy []string,
+) (map[string]*analysisAggregate, []string, bool) {
+	if run == nil || run.session == nil {
+		return nil, nil, false
+	}
+	matches := run.session.ScopedMatches()
+	if len(matches) != 1 {
+		return nil, nil, false
+	}
+
+	match := matches[0]
+	scorecardRef := matchSubresourceRef(match, "matchcards", "matchcards")
+	if strings.TrimSpace(scorecardRef) == "" {
+		return nil, nil, false
+	}
+
+	resolved, err := s.client.ResolveRefChain(ctx, scorecardRef)
+	if err != nil {
+		return nil, nil, false
+	}
+	scorecard, err := NormalizeMatchScorecard(resolved.Body, match)
+	if err != nil {
+		return nil, nil, false
+	}
+
+	teamIDByAlias := map[string]string{}
+	playerNameByID := map[string]string{}
+	for _, team := range match.Teams {
+		teamID := strings.TrimSpace(team.ID)
+		for _, raw := range []string{team.Name, team.ShortName, team.Abbreviation} {
+			alias := normalizeAlias(raw)
+			if alias == "" {
+				continue
+			}
+			if _, exists := teamIDByAlias[alias]; !exists {
+				teamIDByAlias[alias] = teamID
+			}
+		}
+
+		rosterRef := nonEmpty(strings.TrimSpace(team.RosterRef), competitorSubresourceRef(match, team.ID, "roster"))
+		if strings.TrimSpace(rosterRef) == "" {
+			continue
+		}
+		rosterDoc, rosterErr := s.client.ResolveRefChain(ctx, rosterRef)
+		if rosterErr != nil {
+			continue
+		}
+		entries, normalizeErr := NormalizeTeamRosterEntries(rosterDoc.Body, team, TeamScopeMatch, match.ID)
+		if normalizeErr != nil {
+			continue
+		}
+		for _, entry := range entries {
+			playerID := strings.TrimSpace(entry.PlayerID)
+			playerName := strings.TrimSpace(entry.DisplayName)
+			if playerID == "" || playerName == "" {
+				continue
+			}
+			if _, exists := playerNameByID[playerID]; !exists {
+				playerNameByID[playerID] = playerName
+			}
+		}
+	}
+
+	seasonID := seasonForMatch(match, run.seasonHint)
+	agg := map[string]*analysisAggregate{}
+	for _, card := range scorecard.BattingCards {
+		teamName := strings.TrimSpace(card.TeamName)
+		teamID := teamIDByAlias[normalizeAlias(teamName)]
+		teamName = analysisDisplayTeamName(s.resolver, teamID, teamName)
+
+		for _, player := range card.Players {
+			runs := analysisNumericString(player.Runs)
+			balls := analysisNumericString(player.BallsFaced)
+			fours := analysisNumericString(player.Fours)
+			sixes := analysisNumericString(player.Sixes)
+			strikeRate := 0.0
+			if balls > 0 {
+				strikeRate = (float64(runs) * 100.0) / float64(balls)
+			}
+
+			row := analysisSourceRow{
+				MatchID:  strings.TrimSpace(match.ID),
+				LeagueID: strings.TrimSpace(nonEmpty(match.LeagueID, run.scope.League.ID)),
+				SeasonID: seasonID,
+				TeamID:   teamID,
+				TeamName: teamName,
+				PlayerID: strings.TrimSpace(player.PlayerID),
+				PlayerName: analysisDisplayPlayerName(
+					s.resolver,
+					player.PlayerID,
+					nonEmpty(playerNameByID[strings.TrimSpace(player.PlayerID)], player.PlayerName),
+				),
+				CountValue:   1,
+				Fours:        fours,
+				BattingSixes: sixes,
+				RunsScored:   runs,
+				BallsFaced:   balls,
+				StrikeSample: strikeRate,
+			}
+			if !filters.matches(row) {
+				continue
+			}
+
+			key, dims := buildAnalysisGroup(row, groupBy)
+			entry := agg[key]
+			if entry == nil {
+				entry = &analysisAggregate{row: dims, matchIDs: map[string]struct{}{}}
+				agg[key] = entry
+			}
+			entry.matchIDs[row.MatchID] = struct{}{}
+			entry.fours += row.Fours
+			entry.battingSixes += row.BattingSixes
+			entry.runsScored += row.RunsScored
+			entry.ballsFaced += row.BallsFaced
+			if row.StrikeSample > 0 {
+				entry.strikeRateTotal += row.StrikeSample
+				entry.strikeRateCount++
+			}
+		}
+	}
+	return agg, nil, true
 }
 
 // Partnerships ranks partnerships over match or season scope.
@@ -1271,6 +1406,35 @@ func analysisMaxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func analysisNumericString(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	start := -1
+	end := -1
+	for i, r := range raw {
+		if r >= '0' && r <= '9' {
+			if start == -1 {
+				start = i
+			}
+			end = i + 1
+			continue
+		}
+		if start != -1 {
+			break
+		}
+	}
+	if start == -1 || end == -1 {
+		return 0
+	}
+	value, err := strconv.Atoi(raw[start:end])
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 func analysisDisplayPlayerName(resolver *Resolver, playerID, fallback string) string {
