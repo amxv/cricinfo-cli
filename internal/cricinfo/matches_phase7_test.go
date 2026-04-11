@@ -101,11 +101,18 @@ func TestMatchServicePhase7ScorecardAndSituation(t *testing.T) {
 	if situationResult.Kind != EntityMatchSituation {
 		t.Fatalf("expected situation kind %q, got %q", EntityMatchSituation, situationResult.Kind)
 	}
-	if situationResult.Status != ResultStatusEmpty {
-		t.Fatalf("expected sparse situation to return empty status, got %q", situationResult.Status)
+	if situationResult.Status == ResultStatusEmpty {
+		t.Fatalf("expected sparse situation to synthesize live fallback data")
 	}
-	if strings.TrimSpace(situationResult.Message) == "" {
-		t.Fatalf("expected sparse situation message to be populated")
+	situation, ok := situationResult.Data.(*MatchSituation)
+	if !ok {
+		t.Fatalf("expected situation data type *MatchSituation, got %T", situationResult.Data)
+	}
+	if situation.Live == nil {
+		t.Fatalf("expected synthesized live situation view")
+	}
+	if len(situation.Live.RecentBalls) == 0 {
+		t.Fatalf("expected recent balls in synthesized live situation view")
 	}
 }
 

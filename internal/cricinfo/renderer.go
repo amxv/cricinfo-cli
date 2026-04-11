@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -201,6 +202,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatInningsTimelines(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityMatchSituation {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Match Situation")
+			lines = append(lines, formatMatchSituation(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 		if result.Kind == EntityPlayerStats {
 			itemMap, err := toMap(result.Data, opts.AllFields)
 			if err != nil {
@@ -339,19 +349,23 @@ func summarizeDeliveryListItem(item any, kind EntityKind) string {
 		if short == "" {
 			short = joinParts("over "+intString(typed.OverNumber), "ball "+intString(typed.BallNumber))
 		}
+		lead := firstNonEmpty(overBallString(typed.OverNumber, typed.BallNumber), "")
+		score := firstNonEmpty(scoreLabel(typed.HomeScore), scoreLabel(typed.AwayScore))
 		if kind == EntityPlayerDelivery {
-			return joinParts(short, strings.Join(typed.Involvement, ","), overBallString(typed.OverNumber, typed.BallNumber))
+			return joinParts(lead, short, score, strings.Join(typed.Involvement, ","))
 		}
-		return short
+		return joinParts(lead, short, score)
 	case map[string]any:
 		short := firstNonEmpty(valueString(typed, "shortText"), valueString(typed, "text"))
 		if short == "" {
 			short = joinParts("over "+valueString(typed, "overNumber"), "ball "+valueString(typed, "ballNumber"))
 		}
+		lead := overBallLabel(typed)
+		score := firstNonEmpty(scoreLabel(valueString(typed, "homeScore")), scoreLabel(valueString(typed, "awayScore")))
 		if kind == EntityPlayerDelivery {
-			return joinParts(short, involvementLabel(typed), overBallLabel(typed))
+			return joinParts(lead, short, score, involvementLabel(typed))
 		}
-		return short
+		return joinParts(lead, short, score)
 	default:
 		return ""
 	}
@@ -361,7 +375,7 @@ func overBallString(over, ball int) string {
 	if over <= 0 || ball <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("over %d.%d", over, ball)
+	return fmt.Sprintf("%d.%d", over, ball)
 }
 
 func intString(value int) string {
@@ -377,6 +391,17 @@ func defaultNumeric(raw string) string {
 		return "0"
 	}
 	return raw
+}
+
+func scoreLabel(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.Contains(raw, "/") {
+		return raw
+	}
+	return ""
 }
 
 func sanitizeValue(value any, allFields bool) (any, error) {
@@ -998,6 +1023,119 @@ func formatMatchView(entity map[string]any) []string {
 		lines = append(lines, "Teams: "+teams)
 	}
 	return lines
+}
+
+func formatMatchSituation(entity map[string]any) []string {
+	lines := make([]string, 0, 64)
+	if matchID := firstNonEmpty(valueString(entity, "matchId"), valueString(entity, "competitionId")); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+
+	live, _ := entity["live"].(map[string]any)
+	if live == nil {
+		if oddsRef := valueString(entity, "oddsRef"); oddsRef != "" {
+			lines = append(lines, "Odds Ref: "+oddsRef)
+		}
+		if data, ok := entity["data"].(map[string]any); ok && len(data) > 0 {
+			lines = append(lines, "Data: "+printableValue(data))
+		}
+		if len(lines) <= 1 {
+			lines = append(lines, "No situation data available for this match.")
+		}
+		return lines
+	}
+
+	if fixture := valueString(live, "fixture"); fixture != "" {
+		lines = append(lines, "Fixture: "+fixture)
+	}
+	if status := valueString(live, "status"); status != "" {
+		lines = append(lines, "Status: "+status)
+	}
+	scoreLine := joinParts(valueString(live, "score"), valueString(live, "overs"))
+	if scoreLine != "" {
+		lines = append(lines, "Score: "+scoreLine)
+	}
+	teamsLine := joinParts(
+		"Batting "+valueString(live, "battingTeam"),
+		"Bowling "+valueString(live, "bowlingTeam"),
+	)
+	if teamsLine != "" {
+		lines = append(lines, teamsLine)
+	}
+
+	batters := sliceValue(live, "batters")
+	if len(batters) > 0 {
+		lines = append(lines, "Batters")
+		for i, raw := range batters {
+			batter, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			score := fmt.Sprintf("%s(%s)", defaultNumeric(valueString(batter, "runs")), defaultNumeric(valueString(batter, "balls")))
+			boundaries := joinParts("4s "+defaultNumeric(valueString(batter, "fours")), "6s "+defaultNumeric(valueString(batter, "sixes")))
+			row := joinParts(
+				firstNonEmpty(valueString(batter, "playerName"), valueString(batter, "playerId")),
+				score,
+				"SR "+defaultNumeric(valueString(batter, "strikeRate")),
+				boundaries,
+			)
+			if strings.EqualFold(valueString(batter, "onStrike"), "true") {
+				row = joinParts(row, "*")
+			}
+			lines = append(lines, fmt.Sprintf("  %d. %s", i+1, row))
+		}
+	}
+
+	bowlers := sliceValue(live, "bowlers")
+	if len(bowlers) > 0 {
+		lines = append(lines, "Bowlers")
+		for i, raw := range bowlers {
+			bowler, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			figures := fmt.Sprintf("%s-%s-%s-%s",
+				oversLabelFromFields(valueString(bowler, "overs"), valueString(bowler, "balls")),
+				defaultNumeric(valueString(bowler, "maidens")),
+				defaultNumeric(valueString(bowler, "conceded")),
+				defaultNumeric(valueString(bowler, "wickets")),
+			)
+			row := joinParts(
+				firstNonEmpty(valueString(bowler, "playerName"), valueString(bowler, "playerId")),
+				figures,
+				"Econ "+defaultNumeric(valueString(bowler, "economy")),
+			)
+			lines = append(lines, fmt.Sprintf("  %d. %s", i+1, row))
+		}
+	}
+
+	balls := sliceValue(live, "currentOverBalls")
+	if len(balls) == 0 {
+		balls = sliceValue(live, "recentBalls")
+	}
+	if len(balls) > 0 {
+		lines = append(lines, "Recent Balls")
+		for i, raw := range balls {
+			lines = append(lines, fmt.Sprintf("  %d. %s", i+1, summarizeDeliveryListItem(raw, EntityDeliveryEvent)))
+		}
+	}
+	return lines
+}
+
+func oversLabelFromFields(overs string, balls string) string {
+	overs = strings.TrimSpace(overs)
+	if overs != "" && overs != "0" {
+		return overs
+	}
+	balls = strings.TrimSpace(balls)
+	if balls == "" || balls == "0" {
+		return "0.0"
+	}
+	b, err := strconv.Atoi(balls)
+	if err != nil || b < 0 {
+		return "0.0"
+	}
+	return fmt.Sprintf("%d.%d", b/6, b%6)
 }
 
 func formatMatchPhases(entity map[string]any) []string {

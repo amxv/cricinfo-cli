@@ -226,7 +226,48 @@ type MatchSituation struct {
 	MatchID       string         `json:"matchId,omitempty"`
 	OddsRef       string         `json:"oddsRef,omitempty"`
 	Data          map[string]any `json:"data,omitempty"`
+	Live          *MatchLiveView `json:"live,omitempty"`
 	Extensions    map[string]any `json:"extensions,omitempty"`
+}
+
+// MatchLiveView is a synthesized fan-first live snapshot when upstream situation payload is sparse.
+type MatchLiveView struct {
+	Fixture      string           `json:"fixture,omitempty"`
+	Status       string           `json:"status,omitempty"`
+	Score        string           `json:"score,omitempty"`
+	Overs        string           `json:"overs,omitempty"`
+	CurrentOver  int              `json:"currentOver,omitempty"`
+	BallInOver   int              `json:"ballInOver,omitempty"`
+	BattingTeam  string           `json:"battingTeam,omitempty"`
+	BowlingTeam  string           `json:"bowlingTeam,omitempty"`
+	Batters      []LiveBatterView `json:"batters,omitempty"`
+	Bowlers      []LiveBowlerView `json:"bowlers,omitempty"`
+	RecentBalls  []DeliveryEvent  `json:"recentBalls,omitempty"`
+	CurrentBalls []DeliveryEvent  `json:"currentOverBalls,omitempty"`
+}
+
+// LiveBatterView captures in-progress batter figures.
+type LiveBatterView struct {
+	PlayerID   string  `json:"playerId,omitempty"`
+	PlayerName string  `json:"playerName,omitempty"`
+	Runs       int     `json:"runs,omitempty"`
+	Balls      int     `json:"balls,omitempty"`
+	Fours      int     `json:"fours,omitempty"`
+	Sixes      int     `json:"sixes,omitempty"`
+	StrikeRate float64 `json:"strikeRate,omitempty"`
+	OnStrike   bool    `json:"onStrike"`
+}
+
+// LiveBowlerView captures in-progress bowler figures.
+type LiveBowlerView struct {
+	PlayerID   string  `json:"playerId,omitempty"`
+	PlayerName string  `json:"playerName,omitempty"`
+	Overs      float64 `json:"overs,omitempty"`
+	Balls      int     `json:"balls,omitempty"`
+	Maidens    int     `json:"maidens,omitempty"`
+	Conceded   int     `json:"conceded,omitempty"`
+	Wickets    int     `json:"wickets,omitempty"`
+	Economy    float64 `json:"economy,omitempty"`
 }
 
 // Competition is the normalized competition metadata root view.
@@ -693,43 +734,67 @@ type InningsWicket struct {
 
 // DeliveryEvent is the normalized ball-level event shape.
 type DeliveryEvent struct {
-	Ref              string         `json:"ref,omitempty"`
-	ID               string         `json:"id,omitempty"`
-	LeagueID         string         `json:"leagueId,omitempty"`
-	EventID          string         `json:"eventId,omitempty"`
-	CompetitionID    string         `json:"competitionId,omitempty"`
-	MatchID          string         `json:"matchId,omitempty"`
-	TeamID           string         `json:"teamId,omitempty"`
-	Period           int            `json:"period,omitempty"`
-	PeriodText       string         `json:"periodText,omitempty"`
-	OverNumber       int            `json:"overNumber,omitempty"`
-	BallNumber       int            `json:"ballNumber,omitempty"`
-	ScoreValue       int            `json:"scoreValue,omitempty"`
-	ShortText        string         `json:"shortText,omitempty"`
-	Text             string         `json:"text,omitempty"`
-	HomeScore        string         `json:"homeScore,omitempty"`
-	AwayScore        string         `json:"awayScore,omitempty"`
-	BatsmanRef       string         `json:"batsmanRef,omitempty"`
-	BowlerRef        string         `json:"bowlerRef,omitempty"`
-	BatsmanPlayerID  string         `json:"batsmanPlayerId,omitempty"`
-	BowlerPlayerID   string         `json:"bowlerPlayerId,omitempty"`
-	FielderPlayerID  string         `json:"fielderPlayerId,omitempty"`
-	AthletePlayerIDs []string       `json:"athletePlayerIds,omitempty"`
-	Involvement      []string       `json:"involvement,omitempty"`
-	PlayType         map[string]any `json:"playType,omitempty"`
-	Dismissal        map[string]any `json:"dismissal,omitempty"`
-	DismissalType    string         `json:"dismissalType,omitempty"`
-	DismissalName    string         `json:"dismissalName,omitempty"`
-	DismissalCard    string         `json:"dismissalCard,omitempty"`
-	DismissalText    string         `json:"dismissalText,omitempty"`
-	SpeedKPH         float64        `json:"speedKPH,omitempty"`
-	XCoordinate      *float64       `json:"xCoordinate"`
-	YCoordinate      *float64       `json:"yCoordinate"`
-	BBBTimestamp     int64          `json:"bbbTimestamp"`
-	CoordinateX      *float64       `json:"coordinateX,omitempty"`
-	CoordinateY      *float64       `json:"coordinateY,omitempty"`
-	Timestamp        int64          `json:"timestamp,omitempty"`
-	Extensions       map[string]any `json:"extensions,omitempty"`
+	Ref                 string         `json:"ref,omitempty"`
+	ID                  string         `json:"id,omitempty"`
+	LeagueID            string         `json:"leagueId,omitempty"`
+	EventID             string         `json:"eventId,omitempty"`
+	CompetitionID       string         `json:"competitionId,omitempty"`
+	MatchID             string         `json:"matchId,omitempty"`
+	TeamID              string         `json:"teamId,omitempty"`
+	Period              int            `json:"period,omitempty"`
+	PeriodText          string         `json:"periodText,omitempty"`
+	OverNumber          int            `json:"overNumber,omitempty"`
+	BallNumber          int            `json:"ballNumber,omitempty"`
+	ScoreValue          int            `json:"scoreValue,omitempty"`
+	ShortText           string         `json:"shortText,omitempty"`
+	Text                string         `json:"text,omitempty"`
+	HomeScore           string         `json:"homeScore,omitempty"`
+	AwayScore           string         `json:"awayScore,omitempty"`
+	BatsmanRef          string         `json:"batsmanRef,omitempty"`
+	BowlerRef           string         `json:"bowlerRef,omitempty"`
+	OtherBatsmanRef     string         `json:"otherBatsmanRef,omitempty"`
+	OtherBowlerRef      string         `json:"otherBowlerRef,omitempty"`
+	BatsmanPlayerID     string         `json:"batsmanPlayerId,omitempty"`
+	BowlerPlayerID      string         `json:"bowlerPlayerId,omitempty"`
+	OtherBatsmanID      string         `json:"otherBatsmanPlayerId,omitempty"`
+	OtherBowlerID       string         `json:"otherBowlerPlayerId,omitempty"`
+	FielderPlayerID     string         `json:"fielderPlayerId,omitempty"`
+	AthletePlayerIDs    []string       `json:"athletePlayerIds,omitempty"`
+	Involvement         []string       `json:"involvement,omitempty"`
+	BatsmanRuns         int            `json:"batsmanRuns,omitempty"`
+	BatsmanTotalRuns    int            `json:"batsmanTotalRuns,omitempty"`
+	BatsmanBalls        int            `json:"batsmanBalls,omitempty"`
+	BatsmanFours        int            `json:"batsmanFours,omitempty"`
+	BatsmanSixes        int            `json:"batsmanSixes,omitempty"`
+	OtherBatterRuns     int            `json:"otherBatterRuns,omitempty"`
+	OtherBatterBalls    int            `json:"otherBatterBalls,omitempty"`
+	OtherBatterFours    int            `json:"otherBatterFours,omitempty"`
+	OtherBatterSixes    int            `json:"otherBatterSixes,omitempty"`
+	BowlerOvers         float64        `json:"bowlerOvers,omitempty"`
+	BowlerBalls         int            `json:"bowlerBalls,omitempty"`
+	BowlerMaidens       int            `json:"bowlerMaidens,omitempty"`
+	BowlerConceded      int            `json:"bowlerConceded,omitempty"`
+	BowlerWickets       int            `json:"bowlerWickets,omitempty"`
+	OtherBowlerOvers    float64        `json:"otherBowlerOvers,omitempty"`
+	OtherBowlerBalls    int            `json:"otherBowlerBalls,omitempty"`
+	OtherBowlerMaidens  int            `json:"otherBowlerMaidens,omitempty"`
+	OtherBowlerConceded int            `json:"otherBowlerConceded,omitempty"`
+	OtherBowlerWickets  int            `json:"otherBowlerWickets,omitempty"`
+	Sequence            int            `json:"sequence,omitempty"`
+	PlayType            map[string]any `json:"playType,omitempty"`
+	Dismissal           map[string]any `json:"dismissal,omitempty"`
+	DismissalType       string         `json:"dismissalType,omitempty"`
+	DismissalName       string         `json:"dismissalName,omitempty"`
+	DismissalCard       string         `json:"dismissalCard,omitempty"`
+	DismissalText       string         `json:"dismissalText,omitempty"`
+	SpeedKPH            float64        `json:"speedKPH,omitempty"`
+	XCoordinate         *float64       `json:"xCoordinate"`
+	YCoordinate         *float64       `json:"yCoordinate"`
+	BBBTimestamp        int64          `json:"bbbTimestamp"`
+	CoordinateX         *float64       `json:"coordinateX,omitempty"`
+	CoordinateY         *float64       `json:"coordinateY,omitempty"`
+	Timestamp           int64          `json:"timestamp,omitempty"`
+	Extensions          map[string]any `json:"extensions,omitempty"`
 }
 
 // StatCategory is the normalized grouped statistics shape.
