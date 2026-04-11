@@ -5,13 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const defaultMatchListLimit = 20
 const deliveryFetchConcurrency = 12
+const matchTeamQueryScanRange = 6
+const maxTeamQueryEventCandidates = 36
+const teamQueryEventFetchTimeout = 1500 * time.Millisecond
 
 // MatchServiceConfig configures match discovery and lookup behavior.
 type MatchServiceConfig struct {
@@ -21,7 +26,8 @@ type MatchServiceConfig struct {
 
 // MatchListOptions controls list/live traversal behavior.
 type MatchListOptions struct {
-	Limit int
+	Limit    int
+	LeagueID string
 }
 
 // MatchLookupOptions controls resolver-backed single match lookup.
@@ -417,9 +423,14 @@ func (s *MatchService) Deliveries(ctx context.Context, query string, opts MatchI
 }
 
 func (s *MatchService) listFromEvents(ctx context.Context, opts MatchListOptions, liveOnly bool) (NormalizedResult, error) {
-	resolved, err := s.client.ResolveRefChain(ctx, "/events")
+	rootRef := "/events"
+	if leagueID := strings.TrimSpace(opts.LeagueID); leagueID != "" {
+		rootRef = "/leagues/" + leagueID + "/events"
+	}
+
+	resolved, err := s.client.ResolveRefChain(ctx, rootRef)
 	if err != nil {
-		return NewTransportErrorResult(EntityMatch, "/events", err), nil
+		return NewTransportErrorResult(EntityMatch, rootRef, err), nil
 	}
 
 	page, err := DecodePage[Ref](resolved.Body)
@@ -532,16 +543,24 @@ func (s *MatchService) resolveMatchLookup(ctx context.Context, query string, opt
 		result := NewTransportErrorResult(EntityMatch, query, err)
 		return nil, &result
 	}
-	if len(searchResult.Entities) == 0 {
-		result := NormalizedResult{
-			Kind:    EntityMatch,
-			Status:  ResultStatusEmpty,
-			Message: fmt.Sprintf("no matches found for %q", query),
+	warnings := append([]string{}, searchResult.Warnings...)
+	entity := IndexedEntity{}
+	if len(searchResult.Entities) > 0 {
+		entity = searchResult.Entities[0]
+	} else {
+		discovered, discoveryWarnings := s.discoverMatchByTeamQuery(ctx, query, strings.TrimSpace(opts.LeagueID))
+		warnings = append(warnings, discoveryWarnings...)
+		if discovered == nil {
+			result := NormalizedResult{
+				Kind:    EntityMatch,
+				Status:  ResultStatusEmpty,
+				Message: fmt.Sprintf("no matches found for %q", query),
+			}
+			return nil, &result
 		}
-		return nil, &result
+		entity = *discovered
 	}
 
-	entity := searchResult.Entities[0]
 	ref := buildMatchRef(entity)
 	if ref == "" {
 		result := NormalizedResult{
@@ -571,8 +590,320 @@ func (s *MatchService) resolveMatchLookup(ctx context.Context, query string, opt
 	return &matchLookup{
 		match:    match,
 		resolved: resolved,
-		warnings: searchResult.Warnings,
+		warnings: compactWarnings(warnings),
 	}, nil
+}
+
+func (s *MatchService) discoverMatchByTeamQuery(ctx context.Context, query, leagueID string) (*IndexedEntity, []string) {
+	left, right, ok := parseTeamVsQuery(query)
+	if !ok {
+		return nil, nil
+	}
+
+	preferredLeagueID := inferTeamQueryLeagueHint(left, right)
+	candidates, err := s.buildTeamQueryEventCandidates(ctx, leagueID, preferredLeagueID)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("team-query fallback unavailable: %v", err)}
+	}
+	if len(candidates) == 0 {
+		return nil, []string{"team-query fallback found no event candidates"}
+	}
+
+	for _, eventID := range candidates {
+		reqCtx, cancel := context.WithTimeout(ctx, teamQueryEventFetchTimeout)
+		resolved, resolveErr := s.client.ResolveRefChain(reqCtx, "/events/"+eventID)
+		cancel()
+		if resolveErr != nil {
+			continue
+		}
+
+		payload, decodeErr := decodePayloadMap(resolved.Body)
+		if decodeErr != nil {
+			continue
+		}
+		if !eventMatchesTeamQuery(payload, left, right) {
+			continue
+		}
+
+		competitions := mapSliceField(payload, "competitions")
+		competitionID := ""
+		competitionRef := ""
+		if len(competitions) > 0 {
+			competitionID = stringField(competitions[0], "id")
+			competitionRef = stringField(competitions[0], "$ref")
+		}
+
+		competitionID = nonEmpty(competitionID, stringField(payload, "id"))
+		if competitionID == "" {
+			continue
+		}
+
+		refIDsMap := refIDs(nonEmpty(competitionRef, resolved.CanonicalRef, resolved.RequestedRef))
+		eventIDResolved := nonEmpty(stringField(payload, "id"), refIDsMap["eventId"])
+		leagueIDResolved := nonEmpty(refIDsMap["leagueId"], strings.TrimSpace(leagueID))
+		if competitionRef == "" && leagueIDResolved != "" && eventIDResolved != "" {
+			competitionRef = fmt.Sprintf("/leagues/%s/events/%s/competitions/%s", leagueIDResolved, eventIDResolved, competitionID)
+		}
+		if competitionRef == "" {
+			continue
+		}
+
+		entity := IndexedEntity{
+			Kind:      EntityMatch,
+			ID:        competitionID,
+			Ref:       competitionRef,
+			Name:      nonEmpty(stringField(payload, "name"), stringField(payload, "shortDescription"), stringField(payload, "description")),
+			ShortName: nonEmpty(stringField(payload, "shortName"), stringField(payload, "shortDescription")),
+			LeagueID:  leagueIDResolved,
+			EventID:   eventIDResolved,
+			MatchID:   competitionID,
+			Aliases: []string{
+				stringField(payload, "name"),
+				stringField(payload, "shortName"),
+				stringField(payload, "shortDescription"),
+				stringField(payload, "description"),
+				left,
+				right,
+				competitionID,
+				eventIDResolved,
+			},
+			UpdatedAt: time.Now().UTC(),
+		}
+		if s.resolver != nil && s.resolver.index != nil {
+			_ = s.resolver.index.Upsert(entity)
+		}
+		return &entity, []string{fmt.Sprintf("team-query fallback matched event %s", eventIDResolved)}
+	}
+
+	return nil, []string{"team-query fallback scanned recent events with no match"}
+}
+
+func (s *MatchService) buildTeamQueryEventCandidates(ctx context.Context, leagueID, preferredLeagueID string) ([]string, error) {
+	rootRef := "/events"
+	if strings.TrimSpace(leagueID) != "" {
+		rootRef = "/leagues/" + strings.TrimSpace(leagueID) + "/events"
+	}
+
+	seedRefs := make([]Ref, 0)
+	if refs, err := s.fetchEventRefs(ctx, rootRef); err == nil {
+		seedRefs = append(seedRefs, refs...)
+	}
+	if len(seedRefs) == 0 && rootRef != "/events" {
+		refs, err := s.fetchEventRefs(ctx, "/events")
+		if err != nil {
+			return nil, err
+		}
+		seedRefs = append(seedRefs, refs...)
+	}
+
+	seen := map[string]struct{}{}
+	candidates := make([]string, 0, maxTeamQueryEventCandidates)
+	type eventSeed struct {
+		id       int
+		leagueID string
+	}
+	seeds := make([]eventSeed, 0, len(seedRefs))
+	for _, item := range seedRefs {
+		ids := refIDs(item.URL)
+		eventID := strings.TrimSpace(ids["eventId"])
+		if eventID == "" {
+			continue
+		}
+
+		seed, err := strconv.Atoi(eventID)
+		if err != nil {
+			continue
+		}
+		seeds = append(seeds, eventSeed{id: seed, leagueID: strings.TrimSpace(ids["leagueId"])})
+	}
+
+	sort.Slice(seeds, func(i, j int) bool {
+		iPref := strings.TrimSpace(preferredLeagueID) != "" && seeds[i].leagueID == strings.TrimSpace(preferredLeagueID)
+		jPref := strings.TrimSpace(preferredLeagueID) != "" && seeds[j].leagueID == strings.TrimSpace(preferredLeagueID)
+		if iPref != jPref {
+			return iPref
+		}
+		return seeds[i].id > seeds[j].id
+	})
+
+	for delta := 0; delta <= matchTeamQueryScanRange; delta++ {
+		for _, seed := range seeds {
+			down := strconv.Itoa(seed.id - delta)
+			if _, ok := seen[down]; !ok {
+				seen[down] = struct{}{}
+				candidates = append(candidates, down)
+				if len(candidates) >= maxTeamQueryEventCandidates {
+					return candidates, nil
+				}
+			}
+
+			if delta == 0 {
+				continue
+			}
+			up := strconv.Itoa(seed.id + delta)
+			if _, ok := seen[up]; !ok {
+				seen[up] = struct{}{}
+				candidates = append(candidates, up)
+				if len(candidates) >= maxTeamQueryEventCandidates {
+					return candidates, nil
+				}
+			}
+		}
+	}
+
+	return candidates, nil
+}
+
+func (s *MatchService) fetchEventRefs(ctx context.Context, ref string) ([]Ref, error) {
+	resolved, err := s.client.ResolveRefChain(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	page, err := DecodePage[Ref](resolved.Body)
+	if err != nil {
+		return nil, err
+	}
+	return page.Items, nil
+}
+
+func parseTeamVsQuery(query string) (string, string, bool) {
+	normalized := normalizeAlias(query)
+	if normalized == "" {
+		return "", "", false
+	}
+
+	separators := []string{" versus ", " vs ", " v "}
+	for _, sep := range separators {
+		parts := strings.SplitN(normalized, sep, 2)
+		if len(parts) != 2 {
+			continue
+		}
+		left := strings.TrimSpace(parts[0])
+		right := strings.TrimSpace(parts[1])
+		if left == "" || right == "" {
+			return "", "", false
+		}
+		return left, right, true
+	}
+	return "", "", false
+}
+
+func eventMatchesTeamQuery(payload map[string]any, left, right string) bool {
+	parts := []string{
+		stringField(payload, "name"),
+		stringField(payload, "shortName"),
+		stringField(payload, "shortDescription"),
+		stringField(payload, "description"),
+	}
+	for _, competition := range mapSliceField(payload, "competitions") {
+		parts = append(parts,
+			stringField(competition, "name"),
+			stringField(competition, "shortName"),
+			stringField(competition, "shortDescription"),
+			stringField(competition, "description"),
+			stringField(competition, "note"),
+		)
+	}
+
+	haystack := normalizeAlias(strings.Join(parts, " "))
+	return teamQuerySideMatches(haystack, left) && teamQuerySideMatches(haystack, right)
+}
+
+func teamQuerySideMatches(haystack, side string) bool {
+	if haystack == "" {
+		return false
+	}
+	for _, variant := range teamQueryVariants(side) {
+		if variant != "" && strings.Contains(haystack, variant) {
+			return true
+		}
+	}
+	return false
+}
+
+func teamQueryVariants(side string) []string {
+	base := normalizeAlias(side)
+	if base == "" {
+		return nil
+	}
+
+	seen := map[string]struct{}{base: {}}
+	variants := []string{base}
+
+	add := func(value string) {
+		value = normalizeAlias(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		variants = append(variants, value)
+	}
+
+	if strings.Contains(base, "bangalore") {
+		add(strings.ReplaceAll(base, "bangalore", "bengaluru"))
+	}
+	if strings.Contains(base, "bengaluru") {
+		add(strings.ReplaceAll(base, "bengaluru", "bangalore"))
+	}
+
+	for _, alias := range knownIPLTeamAliases[base] {
+		add(alias)
+	}
+
+	return variants
+}
+
+func inferTeamQueryLeagueHint(left, right string) string {
+	left = normalizeAlias(left)
+	right = normalizeAlias(right)
+	if left == "" || right == "" {
+		return ""
+	}
+	_, leftKnown := knownIPLTeamAliases[left]
+	_, rightKnown := knownIPLTeamAliases[right]
+	if leftKnown && rightKnown {
+		return "8048"
+	}
+	return ""
+}
+
+var knownIPLTeamAliases = map[string][]string{
+	"csk":                         {"chennai super kings", "chennai"},
+	"chennai super kings":         {"csk", "chennai"},
+	"chennai":                     {"csk", "chennai super kings"},
+	"dc":                          {"delhi capitals", "delhi"},
+	"delhi capitals":              {"dc", "delhi"},
+	"delhi":                       {"dc", "delhi capitals"},
+	"gt":                          {"gujarat titans", "gujarat"},
+	"gujarat titans":              {"gt", "gujarat"},
+	"gujarat":                     {"gt", "gujarat titans"},
+	"kkr":                         {"kolkata knight riders", "kolkata"},
+	"kolkata knight riders":       {"kkr", "kolkata"},
+	"kolkata":                     {"kkr", "kolkata knight riders"},
+	"lsg":                         {"lucknow super giants", "lucknow"},
+	"lucknow super giants":        {"lsg", "lucknow"},
+	"lucknow":                     {"lsg", "lucknow super giants"},
+	"mi":                          {"mumbai indians", "mumbai"},
+	"mumbai indians":              {"mi", "mumbai"},
+	"mumbai":                      {"mi", "mumbai indians"},
+	"pbks":                        {"punjab kings", "punjab"},
+	"punjab kings":                {"pbks", "punjab", "kxip"},
+	"punjab":                      {"pbks", "punjab kings", "kxip"},
+	"kxip":                        {"pbks", "punjab kings", "punjab"},
+	"rcb":                         {"royal challengers bengaluru", "royal challengers bangalore", "bangalore", "bengaluru"},
+	"royal challengers bengaluru": {"rcb", "royal challengers bangalore", "bangalore", "bengaluru"},
+	"royal challengers bangalore": {"rcb", "royal challengers bengaluru", "bangalore", "bengaluru"},
+	"bangalore":                   {"rcb", "royal challengers bengaluru", "royal challengers bangalore", "bengaluru"},
+	"bengaluru":                   {"rcb", "royal challengers bengaluru", "royal challengers bangalore", "bangalore"},
+	"rr":                          {"rajasthan royals", "rajasthan"},
+	"rajasthan royals":            {"rr", "rajasthan"},
+	"rajasthan":                   {"rr", "rajasthan royals"},
+	"srh":                         {"sunrisers hyderabad", "hyderabad"},
+	"sunrisers hyderabad":         {"srh", "hyderabad"},
+	"hyderabad":                   {"srh", "sunrisers hyderabad"},
 }
 
 func (s *MatchService) deliveryEventsFromRoute(ctx context.Context, ref string, baseWarnings []string) (NormalizedResult, error) {

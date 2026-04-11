@@ -375,6 +375,15 @@ func (r *Resolver) seedCompetitionMap(ctx context.Context, comp map[string]any, 
 	matchName := nonEmpty(stringField(comp, "shortDescription"), stringField(comp, "description"), stringField(comp, "note"), eventName, stringField(comp, "date"))
 	matchShort := nonEmpty(stringField(comp, "shortDescription"), eventName)
 
+	competitors := mapSliceField(comp, "competitors")
+	teamAliases := make([]string, 0)
+	for _, competitor := range competitors {
+		if err := r.seedCompetitorMap(ctx, competitor, leagueID, eventID, competitionID); err != nil {
+			return err
+		}
+		teamAliases = append(teamAliases, r.matchTeamAliasesFromCompetitor(ctx, competitor, leagueID, competitionID)...)
+	}
+
 	if err := r.index.Upsert(IndexedEntity{
 		Kind:      EntityMatch,
 		ID:        competitionID,
@@ -384,30 +393,65 @@ func (r *Resolver) seedCompetitionMap(ctx context.Context, comp map[string]any, 
 		LeagueID:  leagueID,
 		EventID:   eventID,
 		MatchID:   competitionID,
-		Aliases: []string{
+		Aliases: append([]string{
 			stringField(comp, "description"),
 			stringField(comp, "shortDescription"),
 			stringField(comp, "note"),
 			eventName,
 			competitionID,
 			eventID,
-		},
+		}, teamAliases...),
 		UpdatedAt: r.now(),
 	}); err != nil {
 		return err
-	}
-
-	competitors := mapSliceField(comp, "competitors")
-	for _, competitor := range competitors {
-		if err := r.seedCompetitorMap(ctx, competitor, leagueID, eventID, competitionID); err != nil {
-			return err
-		}
 	}
 
 	if compRef != "" {
 		r.markHydrated(r.absoluteRef(compRef))
 	}
 	return nil
+}
+
+func (r *Resolver) matchTeamAliasesFromCompetitor(ctx context.Context, competitor map[string]any, leagueID, matchID string) []string {
+	aliases := []string{
+		stringField(mapField(competitor, "team"), "displayName"),
+		stringField(mapField(competitor, "team"), "name"),
+		stringField(mapField(competitor, "team"), "shortDisplayName"),
+		stringField(mapField(competitor, "team"), "shortName"),
+		stringField(mapField(competitor, "team"), "abbreviation"),
+	}
+
+	teamRef := refFromField(competitor, "team")
+	teamID := nonEmpty(
+		refIDs(teamRef)["teamId"],
+		stringField(mapField(competitor, "team"), "id"),
+		stringField(competitor, "id"),
+	)
+	if teamID == "" {
+		return aliases
+	}
+
+	if existing, ok := r.index.FindByID(EntityTeam, teamID); ok {
+		aliases = append(aliases, existing.Name, existing.ShortName)
+	}
+	if hasNonEmptyAlias(aliases...) {
+		return aliases
+	}
+
+	_ = r.seedTeamByID(ctx, teamID, leagueID, matchID)
+	if existing, ok := r.index.FindByID(EntityTeam, teamID); ok {
+		aliases = append(aliases, existing.Name, existing.ShortName)
+	}
+	return aliases
+}
+
+func hasNonEmptyAlias(values ...string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Resolver) seedCompetitorMap(ctx context.Context, competitor map[string]any, leagueID, eventID, matchID string) error {

@@ -77,7 +77,10 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
-				return service.List(ctx, cricinfo.MatchListOptions{Limit: opts.limit})
+				return service.List(ctx, cricinfo.MatchListOptions{
+					Limit:    opts.limit,
+					LeagueID: opts.leagueID,
+				})
 			})
 		},
 	}
@@ -98,7 +101,10 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
-				return service.Live(ctx, cricinfo.MatchListOptions{Limit: opts.limit})
+				return service.Live(ctx, cricinfo.MatchListOptions{
+					Limit:    opts.limit,
+					LeagueID: opts.leagueID,
+				})
 			})
 		},
 	}
