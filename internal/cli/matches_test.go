@@ -21,6 +21,7 @@ type fakeMatchService struct {
 	playsResult     cricinfo.NormalizedResult
 	situationResult cricinfo.NormalizedResult
 	liveViewResult  cricinfo.NormalizedResult
+	duelResult      cricinfo.NormalizedResult
 	phasesResult    cricinfo.NormalizedResult
 	inningsResult   cricinfo.NormalizedResult
 	partnerships    cricinfo.NormalizedResult
@@ -77,6 +78,10 @@ func (f *fakeMatchService) Situation(context.Context, string, cricinfo.MatchLook
 
 func (f *fakeMatchService) LiveView(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
 	return f.liveViewResult, nil
+}
+
+func (f *fakeMatchService) Duel(context.Context, string, cricinfo.MatchDuelOptions) (cricinfo.NormalizedResult, error) {
+	return f.duelResult, nil
 }
 
 func (f *fakeMatchService) Phases(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
@@ -177,6 +182,19 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 					{PlayerName: "Hayatullah Noori", Overs: 3, Conceded: 21, Wickets: 1, Economy: 7.0},
 				},
 				RecentBalls: []cricinfo.DeliveryEvent{delivery},
+			},
+		}),
+		duelResult: cricinfo.NewDataResult(cricinfo.EntityMatchDuel, cricinfo.MatchDuel{
+			MatchID:    "1529474",
+			BatterName: "Numan Shah",
+			BowlerName: "Hayatullah Noori",
+			Runs:       10,
+			Balls:      7,
+			Dots:       2,
+			Fours:      2,
+			StrikeRate: 142.86,
+			RecentBalls: []cricinfo.DeliveryEvent{
+				delivery,
 			},
 		}),
 		phasesResult: cricinfo.NewDataResult(cricinfo.EntityMatchPhases, cricinfo.MatchPhases{
@@ -350,6 +368,16 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	liveViewText := liveViewOut.String()
 	if !strings.Contains(liveViewText, "Batters") || !strings.Contains(liveViewText, "Bowlers") {
 		t.Fatalf("expected batters/bowlers sections in live-view output, got %q", liveViewText)
+	}
+
+	var duelOut bytes.Buffer
+	var duelErr bytes.Buffer
+	if err := Run([]string{"matches", "duel", "1529474", "--batter", "Numan Shah", "--bowler", "Hayatullah Noori", "--format", "text"}, &duelOut, &duelErr); err != nil {
+		t.Fatalf("Run matches duel --format text error: %v", err)
+	}
+	duelText := duelOut.String()
+	if !strings.Contains(duelText, "Duel:") || !strings.Contains(duelText, "Numan Shah") {
+		t.Fatalf("expected duel output to include matchup summary, got %q", duelText)
 	}
 
 	var inningsOut bytes.Buffer

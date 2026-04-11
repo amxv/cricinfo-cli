@@ -349,54 +349,62 @@ func (s *AnalysisService) Bowling(ctx context.Context, opts AnalysisMetricOption
 
 	agg := map[string]*analysisAggregate{}
 	warnings := append([]string{}, run.warnings...)
-	for _, match := range run.session.ScopedMatches() {
-		seasonID := seasonForMatch(match, run.seasonHint)
-		players, playerWarnings, hydrateErr := run.session.HydratePlayerMatchSummaries(ctx, match.ID)
-		if hydrateErr != nil {
-			if statusErr := analysisTransportResult(EntityAnalysisBowl, match.ID, hydrateErr); statusErr != nil {
-				return *statusErr, nil
-			}
-			warnings = append(warnings, fmt.Sprintf("match %s player summary: %v", match.ID, hydrateErr))
-			continue
+	if run.mode == analysisScopeMatch {
+		if fastAgg, fastWarnings, used := s.hydrateMatchScopeBowlingFromScorecard(ctx, run, filters, groupBy); used {
+			agg = fastAgg
+			warnings = append(warnings, fastWarnings...)
 		}
-		warnings = append(warnings, playerWarnings...)
-
-		for _, player := range players {
-			totals := extractBowlingTotals(player)
-			playerName := analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName)
-			teamName := analysisDisplayTeamName(s.resolver, player.TeamID, player.TeamName)
-			row := analysisSourceRow{
-				MatchID:       strings.TrimSpace(player.MatchID),
-				LeagueID:      strings.TrimSpace(player.LeagueID),
-				SeasonID:      seasonID,
-				TeamID:        strings.TrimSpace(player.TeamID),
-				TeamName:      strings.TrimSpace(teamName),
-				PlayerID:      strings.TrimSpace(player.PlayerID),
-				PlayerName:    strings.TrimSpace(playerName),
-				CountValue:    1,
-				Dots:          totals.dots,
-				SixesConceded: totals.sixesConceded,
-				Balls:         totals.balls,
-				RunsConceded:  totals.conceded,
-				EconomySample: totals.economy,
-			}
-			if !filters.matches(row) {
+	}
+	if len(agg) == 0 {
+		for _, match := range run.session.ScopedMatches() {
+			seasonID := seasonForMatch(match, run.seasonHint)
+			players, playerWarnings, hydrateErr := run.session.HydratePlayerMatchSummaries(ctx, match.ID)
+			if hydrateErr != nil {
+				if statusErr := analysisTransportResult(EntityAnalysisBowl, match.ID, hydrateErr); statusErr != nil {
+					return *statusErr, nil
+				}
+				warnings = append(warnings, fmt.Sprintf("match %s player summary: %v", match.ID, hydrateErr))
 				continue
 			}
-			key, dims := buildAnalysisGroup(row, groupBy)
-			entry := agg[key]
-			if entry == nil {
-				entry = &analysisAggregate{row: dims, matchIDs: map[string]struct{}{}}
-				agg[key] = entry
-			}
-			entry.matchIDs[row.MatchID] = struct{}{}
-			entry.dots += row.Dots
-			entry.sixesConceded += row.SixesConceded
-			entry.balls += row.Balls
-			entry.runsConceded += row.RunsConceded
-			if row.EconomySample > 0 {
-				entry.economyTotal += row.EconomySample
-				entry.economyCount++
+			warnings = append(warnings, playerWarnings...)
+
+			for _, player := range players {
+				totals := extractBowlingTotals(player)
+				playerName := analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName)
+				teamName := analysisDisplayTeamName(s.resolver, player.TeamID, player.TeamName)
+				row := analysisSourceRow{
+					MatchID:       strings.TrimSpace(player.MatchID),
+					LeagueID:      strings.TrimSpace(player.LeagueID),
+					SeasonID:      seasonID,
+					TeamID:        strings.TrimSpace(player.TeamID),
+					TeamName:      strings.TrimSpace(teamName),
+					PlayerID:      strings.TrimSpace(player.PlayerID),
+					PlayerName:    strings.TrimSpace(playerName),
+					CountValue:    1,
+					Dots:          totals.dots,
+					SixesConceded: totals.sixesConceded,
+					Balls:         totals.balls,
+					RunsConceded:  totals.conceded,
+					EconomySample: totals.economy,
+				}
+				if !filters.matches(row) {
+					continue
+				}
+				key, dims := buildAnalysisGroup(row, groupBy)
+				entry := agg[key]
+				if entry == nil {
+					entry = &analysisAggregate{row: dims, matchIDs: map[string]struct{}{}}
+					agg[key] = entry
+				}
+				entry.matchIDs[row.MatchID] = struct{}{}
+				entry.dots += row.Dots
+				entry.sixesConceded += row.SixesConceded
+				entry.balls += row.Balls
+				entry.runsConceded += row.RunsConceded
+				if row.EconomySample > 0 {
+					entry.economyTotal += row.EconomySample
+					entry.economyCount++
+				}
 			}
 		}
 	}
@@ -445,6 +453,103 @@ func (s *AnalysisService) Bowling(ctx context.Context, opts AnalysisMetricOption
 		Rows:    rows,
 	}
 	return analysisResult(EntityAnalysisBowl, view, warnings), nil
+}
+
+func (s *AnalysisService) hydrateMatchScopeBowlingFromScorecard(
+	ctx context.Context,
+	run *analysisScopeRun,
+	filters analysisFilterSpec,
+	groupBy []string,
+) (map[string]*analysisAggregate, []string, bool) {
+	if run == nil || run.session == nil {
+		return nil, nil, false
+	}
+	matches := run.session.ScopedMatches()
+	if len(matches) != 1 {
+		return nil, nil, false
+	}
+	match := matches[0]
+	scorecardRef := matchSubresourceRef(match, "matchcards", "matchcards")
+	if strings.TrimSpace(scorecardRef) == "" {
+		return nil, nil, false
+	}
+	resolved, err := s.client.ResolveRefChain(ctx, scorecardRef)
+	if err != nil {
+		return nil, nil, false
+	}
+	scorecard, err := NormalizeMatchScorecard(resolved.Body, match)
+	if err != nil {
+		return nil, nil, false
+	}
+	if len(scorecard.BowlingCards) == 0 {
+		return nil, nil, false
+	}
+
+	teamIDByAlias := map[string]string{}
+	for _, team := range match.Teams {
+		teamID := strings.TrimSpace(team.ID)
+		for _, raw := range []string{team.Name, team.ShortName, team.Abbreviation} {
+			alias := normalizeAlias(raw)
+			if alias == "" {
+				continue
+			}
+			if _, exists := teamIDByAlias[alias]; !exists {
+				teamIDByAlias[alias] = teamID
+			}
+		}
+	}
+
+	seasonID := seasonForMatch(match, run.seasonHint)
+	agg := map[string]*analysisAggregate{}
+	for _, card := range scorecard.BowlingCards {
+		teamName := strings.TrimSpace(card.TeamName)
+		teamID := teamIDByAlias[normalizeAlias(teamName)]
+		teamName = analysisDisplayTeamName(s.resolver, teamID, teamName)
+
+		for _, player := range card.Players {
+			conceded := analysisNumericString(player.Conceded)
+			wickets := analysisNumericString(player.Wickets)
+			balls := oversToBalls(player.Overs)
+			econ := 0.0
+			if balls > 0 {
+				econ = float64(conceded) / (float64(balls) / 6.0)
+			}
+			row := analysisSourceRow{
+				MatchID:       strings.TrimSpace(match.ID),
+				LeagueID:      strings.TrimSpace(nonEmpty(match.LeagueID, run.scope.League.ID)),
+				SeasonID:      seasonID,
+				TeamID:        teamID,
+				TeamName:      teamName,
+				PlayerID:      strings.TrimSpace(player.PlayerID),
+				PlayerName:    analysisDisplayPlayerName(s.resolver, player.PlayerID, player.PlayerName),
+				CountValue:    1,
+				Balls:         balls,
+				RunsConceded:  conceded,
+				EconomySample: econ,
+			}
+			if wickets > 0 {
+				row.Dots = 0
+			}
+			if !filters.matches(row) {
+				continue
+			}
+
+			key, dims := buildAnalysisGroup(row, groupBy)
+			entry := agg[key]
+			if entry == nil {
+				entry = &analysisAggregate{row: dims, matchIDs: map[string]struct{}{}}
+				agg[key] = entry
+			}
+			entry.matchIDs[row.MatchID] = struct{}{}
+			entry.balls += row.Balls
+			entry.runsConceded += row.RunsConceded
+			if row.EconomySample > 0 {
+				entry.economyTotal += row.EconomySample
+				entry.economyCount++
+			}
+		}
+	}
+	return agg, nil, true
 }
 
 // Batting ranks batting metrics over match or season scope.
@@ -1435,6 +1540,27 @@ func analysisNumericString(raw string) int {
 		return 0
 	}
 	return value
+}
+
+func oversToBalls(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	if strings.Contains(raw, ".") {
+		parts := strings.SplitN(raw, ".", 2)
+		whole, errWhole := strconv.Atoi(strings.TrimSpace(parts[0]))
+		frac, errFrac := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if errWhole != nil || errFrac != nil || whole < 0 || frac < 0 || frac > 6 {
+			return 0
+		}
+		return whole*6 + frac
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value * 6
 }
 
 func analysisDisplayPlayerName(resolver *Resolver, playerID, fallback string) string {

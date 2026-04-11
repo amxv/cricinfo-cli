@@ -16,6 +16,7 @@ const (
 	EntityMatch           EntityKind = "match"
 	EntityMatchScorecard  EntityKind = "match_scorecard"
 	EntityMatchSituation  EntityKind = "match_situation"
+	EntityMatchDuel       EntityKind = "match_duel"
 	EntityMatchPhases     EntityKind = "match_phases"
 	EntityCompetition     EntityKind = "competition"
 	EntityCompOfficial    EntityKind = "competition_official"
@@ -244,6 +245,12 @@ type MatchLiveView struct {
 	Bowlers      []LiveBowlerView `json:"bowlers,omitempty"`
 	RecentBalls  []DeliveryEvent  `json:"recentBalls,omitempty"`
 	CurrentBalls []DeliveryEvent  `json:"currentOverBalls,omitempty"`
+	LastDetailID string           `json:"lastDetailId,omitempty"`
+	LastUpdateMS int64            `json:"lastUpdateMs,omitempty"`
+	SnapshotAt   string           `json:"snapshotAt,omitempty"`
+	SourceRoute  string           `json:"sourceRoute,omitempty"`
+	Stale        bool             `json:"stale"`
+	StaleReason  string           `json:"staleReason,omitempty"`
 }
 
 // LiveBatterView captures in-progress batter figures.
@@ -268,6 +275,28 @@ type LiveBowlerView struct {
 	Conceded   int     `json:"conceded,omitempty"`
 	Wickets    int     `json:"wickets,omitempty"`
 	Economy    float64 `json:"economy,omitempty"`
+}
+
+// MatchDuel summarizes a batter-vs-bowler matchup in one match.
+type MatchDuel struct {
+	MatchID      string          `json:"matchId,omitempty"`
+	Fixture      string          `json:"fixture,omitempty"`
+	Score        string          `json:"score,omitempty"`
+	BatterID     string          `json:"batterId,omitempty"`
+	BatterName   string          `json:"batterName,omitempty"`
+	BowlerID     string          `json:"bowlerId,omitempty"`
+	BowlerName   string          `json:"bowlerName,omitempty"`
+	Balls        int             `json:"balls,omitempty"`
+	Runs         int             `json:"runs,omitempty"`
+	Dots         int             `json:"dots,omitempty"`
+	Fours        int             `json:"fours,omitempty"`
+	Sixes        int             `json:"sixes,omitempty"`
+	Wickets      int             `json:"wickets,omitempty"`
+	StrikeRate   float64         `json:"strikeRate,omitempty"`
+	RecentBalls  []DeliveryEvent `json:"recentBalls,omitempty"`
+	LastUpdateMS int64           `json:"lastUpdateMs,omitempty"`
+	SnapshotAt   string          `json:"snapshotAt,omitempty"`
+	SourceRoute  string          `json:"sourceRoute,omitempty"`
 }
 
 // Competition is the normalized competition metadata root view.
@@ -1028,6 +1057,8 @@ func kindPlural(kind EntityKind) string {
 		return "match scorecards"
 	case EntityMatchSituation:
 		return "match situations"
+	case EntityMatchDuel:
+		return "match duels"
 	case EntityMatchPhases:
 		return "match phase reports"
 	case EntityCompetition:
@@ -1105,11 +1136,16 @@ func kindPlural(kind EntityKind) string {
 
 func compactWarnings(warnings []string) []string {
 	out := make([]string, 0, len(warnings))
+	seen := map[string]struct{}{}
 	for _, warning := range warnings {
 		warning = strings.TrimSpace(warning)
 		if warning == "" {
 			continue
 		}
+		if _, ok := seen[warning]; ok {
+			continue
+		}
+		seen[warning] = struct{}{}
 		out = append(out, warning)
 	}
 	if len(out) == 0 {

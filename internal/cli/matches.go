@@ -21,6 +21,7 @@ type matchCommandService interface {
 	Plays(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Situation(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	LiveView(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
+	Duel(ctx context.Context, query string, opts cricinfo.MatchDuelOptions) (cricinfo.NormalizedResult, error)
 	Phases(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Innings(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
 	Partnerships(ctx context.Context, query string, opts cricinfo.MatchInningsOptions) (cricinfo.NormalizedResult, error)
@@ -32,6 +33,8 @@ type matchRuntimeOptions struct {
 	limit    int
 	leagueID string
 	team     string
+	batter   string
+	bowler   string
 	innings  int
 	period   int
 }
@@ -286,6 +289,41 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 
+	duelCmd := &cobra.Command{
+		Use:   "duel <match>",
+		Short: "Show batter-vs-bowler matchup summary in one match",
+		Long: strings.Join([]string{
+			"Resolve a match and summarize the head-to-head duel between one batter and one bowler.",
+			"",
+			"Required flags:",
+			"  --batter <player>",
+			"  --bowler <player>",
+			"",
+			"Next steps:",
+			"  cricinfo matches plays <match>",
+			"  cricinfo players deliveries <player> --match <match>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.batter) == "" {
+				return fmt.Errorf("--batter is required")
+			}
+			if strings.TrimSpace(opts.bowler) == "" {
+				return fmt.Errorf("--bowler is required")
+			}
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Duel(ctx, query, cricinfo.MatchDuelOptions{
+					LeagueID:    opts.leagueID,
+					BatterQuery: opts.batter,
+					BowlerQuery: opts.bowler,
+				})
+			})
+		},
+	}
+	duelCmd.Flags().StringVar(&opts.batter, "batter", "", "Required: batter ID/ref/alias")
+	duelCmd.Flags().StringVar(&opts.bowler, "bowler", "", "Required: bowler ID/ref/alias")
+
 	phasesCmd := &cobra.Command{
 		Use:   "phases <match>",
 		Short: "Show powerplay, middle, and death-over phase splits for each innings",
@@ -453,6 +491,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		playsCmd,
 		situationCmd,
 		liveViewCmd,
+		duelCmd,
 		phasesCmd,
 		inningsCmd,
 		partnershipsCmd,

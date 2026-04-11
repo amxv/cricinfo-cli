@@ -274,6 +274,15 @@ func renderText(w io.Writer, result NormalizedResult, opts RenderOptions) error 
 			lines = append(lines, formatMatchPhases(itemMap)...)
 			return writeTextLines(w, lines)
 		}
+		if result.Kind == EntityMatchDuel {
+			itemMap, err := toMap(result.Data, opts.AllFields)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, "Match Duel")
+			lines = append(lines, formatMatchDuel(itemMap)...)
+			return writeTextLines(w, lines)
+		}
 
 		itemMap, err := toMap(result.Data, opts.AllFields)
 		if err != nil {
@@ -359,6 +368,9 @@ func summarizeDeliveryListItem(item any, kind EntityKind) string {
 		short := firstNonEmpty(valueString(typed, "shortText"), valueString(typed, "text"))
 		if short == "" {
 			short = joinParts("over "+valueString(typed, "overNumber"), "ball "+valueString(typed, "ballNumber"))
+		}
+		if strings.TrimSpace(short) == "/" || strings.TrimSpace(short) == "-" {
+			return ""
 		}
 		lead := overBallLabel(typed)
 		score := firstNonEmpty(scoreLabel(valueString(typed, "homeScore")), scoreLabel(valueString(typed, "awayScore")))
@@ -489,6 +501,15 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 			return joinParts("situation", data)
 		}
 		return joinParts("situation", valueString(entity, "competitionId"))
+	case EntityMatchDuel:
+		duelLabel := strings.TrimSpace(fmt.Sprintf("%s vs %s",
+			firstNonEmpty(valueString(entity, "batterName"), valueString(entity, "batterId")),
+			firstNonEmpty(valueString(entity, "bowlerName"), valueString(entity, "bowlerId")),
+		))
+		return joinParts(
+			duelLabel,
+			fmt.Sprintf("%s off %s", valueString(entity, "runs"), valueString(entity, "balls")),
+		)
 	case EntityMatchPhases:
 		return joinParts(
 			"match "+firstNonEmpty(valueString(entity, "matchId"), valueString(entity, "competitionId")),
@@ -1062,6 +1083,15 @@ func formatMatchSituation(entity map[string]any) []string {
 	if teamsLine != "" {
 		lines = append(lines, teamsLine)
 	}
+	if snapshotAt := valueString(live, "snapshotAt"); snapshotAt != "" {
+		lines = append(lines, "Snapshot: "+snapshotAt)
+	}
+	if stale := valueString(live, "stale"); stale == "true" {
+		lines = append(lines, "Stale: true")
+		if reason := valueString(live, "staleReason"); reason != "" {
+			lines = append(lines, "Stale Reason: "+reason)
+		}
+	}
 
 	batters := sliceValue(live, "batters")
 	if len(batters) > 0 {
@@ -1109,12 +1139,48 @@ func formatMatchSituation(entity map[string]any) []string {
 		}
 	}
 
-	balls := sliceValue(live, "currentOverBalls")
+	balls := sliceValue(live, "recentBalls")
 	if len(balls) == 0 {
-		balls = sliceValue(live, "recentBalls")
+		balls = sliceValue(live, "currentOverBalls")
 	}
 	if len(balls) > 0 {
 		lines = append(lines, "Recent Balls")
+		for i, raw := range balls {
+			lines = append(lines, fmt.Sprintf("  %d. %s", i+1, summarizeDeliveryListItem(raw, EntityDeliveryEvent)))
+		}
+	}
+	return lines
+}
+
+func formatMatchDuel(entity map[string]any) []string {
+	lines := make([]string, 0, 48)
+	if matchID := valueString(entity, "matchId"); matchID != "" {
+		lines = append(lines, "Match: "+matchID)
+	}
+	if fixture := valueString(entity, "fixture"); fixture != "" {
+		lines = append(lines, "Fixture: "+fixture)
+	}
+	if score := valueString(entity, "score"); score != "" {
+		lines = append(lines, "Score: "+score)
+	}
+	lines = append(lines, "Duel: "+firstNonEmpty(valueString(entity, "batterName"), valueString(entity, "batterId"))+" vs "+firstNonEmpty(valueString(entity, "bowlerName"), valueString(entity, "bowlerId")))
+	summary := joinParts(
+		fmt.Sprintf("%s off %s", defaultNumeric(valueString(entity, "runs")), defaultNumeric(valueString(entity, "balls"))),
+		"SR "+defaultNumeric(valueString(entity, "strikeRate")),
+		"dots "+defaultNumeric(valueString(entity, "dots")),
+		"4s "+defaultNumeric(valueString(entity, "fours")),
+		"6s "+defaultNumeric(valueString(entity, "sixes")),
+		"wkts "+defaultNumeric(valueString(entity, "wickets")),
+	)
+	if strings.TrimSpace(summary) != "" {
+		lines = append(lines, "Summary: "+summary)
+	}
+	if snapshot := valueString(entity, "snapshotAt"); snapshot != "" {
+		lines = append(lines, "Snapshot: "+snapshot)
+	}
+	balls := sliceValue(entity, "recentBalls")
+	if len(balls) > 0 {
+		lines = append(lines, "Recent Duel Balls")
 		for i, raw := range balls {
 			lines = append(lines, fmt.Sprintf("  %d. %s", i+1, summarizeDeliveryListItem(raw, EntityDeliveryEvent)))
 		}
@@ -1681,9 +1747,9 @@ func overBallLabel(entity map[string]any) string {
 		return ""
 	}
 	if ball == "" {
-		return "over " + over
+		return over
 	}
-	return "over " + over + "." + ball
+	return over + "." + ball
 }
 
 func involvementLabel(entity map[string]any) string {

@@ -22,6 +22,7 @@ const matchLineupRosterFetchTimeout = 5 * time.Second
 const deliveryFetchConcurrency = 96
 const detailSubresourceFetchConcurrency = 24
 const detailItemFetchTimeout = 3 * time.Second
+const liveViewRecentDeliveryFetchCount = 60
 const matchTeamQueryScanRange = 6
 const maxTeamQueryEventCandidates = 36
 const teamQueryEventFetchTimeout = 1500 * time.Millisecond
@@ -49,6 +50,13 @@ type MatchInningsOptions struct {
 	TeamQuery string
 	Innings   int
 	Period    int
+}
+
+// MatchDuelOptions controls batter-vs-bowler matchup lookup behavior.
+type MatchDuelOptions struct {
+	LeagueID    string
+	BatterQuery string
+	BowlerQuery string
 }
 
 // MatchService implements domain-level match discovery and lookup commands.
@@ -318,7 +326,23 @@ func (s *MatchService) Details(ctx context.Context, query string, opts MatchLook
 		}, nil
 	}
 
-	return s.deliveryEventsFromRoute(ctx, detailsRef, lookup.warnings)
+	events, warnings, err := s.deliveryEventsForMatchRefs(ctx, detailsRef, matchSubresourceRef(*lookup.match, "plays", "plays"))
+	if err != nil {
+		return NewTransportErrorResult(EntityDeliveryEvent, detailsRef, err), nil
+	}
+	warnings = append(lookup.warnings, warnings...)
+
+	items := make([]any, 0, len(events))
+	for _, delivery := range events {
+		items = append(items, delivery)
+	}
+	result := NewListResult(EntityDeliveryEvent, items)
+	if len(warnings) > 0 {
+		result = NewPartialListResult(EntityDeliveryEvent, items, warnings...)
+	}
+	result.RequestedRef = detailsRef
+	result.CanonicalRef = detailsRef
+	return result, nil
 }
 
 // Plays resolves and returns normalized delivery events from the plays route.
@@ -338,7 +362,23 @@ func (s *MatchService) Plays(ctx context.Context, query string, opts MatchLookup
 		}, nil
 	}
 
-	return s.deliveryEventsFromRoute(ctx, playsRef, lookup.warnings)
+	events, warnings, err := s.deliveryEventsForMatchRefs(ctx, playsRef, nonEmpty(strings.TrimSpace(lookup.match.DetailsRef), matchSubresourceRef(*lookup.match, "details", "details")))
+	if err != nil {
+		return NewTransportErrorResult(EntityDeliveryEvent, playsRef, err), nil
+	}
+	warnings = append(lookup.warnings, warnings...)
+
+	items := make([]any, 0, len(events))
+	for _, delivery := range events {
+		items = append(items, delivery)
+	}
+	result := NewListResult(EntityDeliveryEvent, items)
+	if len(warnings) > 0 {
+		result = NewPartialListResult(EntityDeliveryEvent, items, warnings...)
+	}
+	result.RequestedRef = playsRef
+	result.CanonicalRef = playsRef
+	return result, nil
 }
 
 // Situation resolves and returns normalized match situation data.
@@ -445,6 +485,133 @@ func (s *MatchService) LiveView(ctx context.Context, query string, opts MatchLoo
 	result := NewDataResult(EntityMatchSituation, situation)
 	if len(warnings) > 0 {
 		result = NewPartialResult(EntityMatchSituation, situation, warnings...)
+	}
+	result.RequestedRef = lookup.resolved.RequestedRef
+	result.CanonicalRef = lookup.resolved.CanonicalRef
+	return result, nil
+}
+
+// Duel resolves and returns a batter-vs-bowler matchup summary for one match.
+func (s *MatchService) Duel(ctx context.Context, query string, opts MatchDuelOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, MatchLookupOptions{LeagueID: opts.LeagueID})
+	if passthrough != nil {
+		passthrough.Kind = EntityMatchDuel
+		return *passthrough, nil
+	}
+	if strings.TrimSpace(opts.BatterQuery) == "" || strings.TrimSpace(opts.BowlerQuery) == "" {
+		return NormalizedResult{
+			Kind:    EntityMatchDuel,
+			Status:  ResultStatusEmpty,
+			Message: "--batter and --bowler are required",
+		}, nil
+	}
+	statusCache := map[string]matchStatusSnapshot{}
+	teamCache := map[string]teamIdentity{}
+	scoreCache := map[string]string{}
+	hydrationWarnings := s.hydrateMatch(ctx, lookup.match, statusCache, teamCache, scoreCache)
+
+	detailsRef := nonEmpty(strings.TrimSpace(lookup.match.DetailsRef), matchSubresourceRef(*lookup.match, "details", "details"))
+	playsRef := matchSubresourceRef(*lookup.match, "plays", "plays")
+	primaryRef := nonEmpty(detailsRef, playsRef)
+	deliveries, warnings, err := s.deliveryEventsForMatchRefs(ctx, primaryRef, playsRef)
+	if err != nil {
+		return NewTransportErrorResult(EntityMatchDuel, primaryRef, err), nil
+	}
+	if len(deliveries) == 0 {
+		return NormalizedResult{
+			Kind:    EntityMatchDuel,
+			Status:  ResultStatusEmpty,
+			Message: "no delivery data available for duel analysis",
+		}, nil
+	}
+	matchLatest := deliveries[len(deliveries)-1]
+
+	batterID, batterName := resolveDuelIdentity(deliveries, strings.TrimSpace(opts.BatterQuery), true)
+	bowlerID, bowlerName := resolveDuelIdentity(deliveries, strings.TrimSpace(opts.BowlerQuery), false)
+	if batterID == "" && normalizeAlias(batterName) == "" {
+		return NormalizedResult{Kind: EntityMatchDuel, Status: ResultStatusEmpty, Message: fmt.Sprintf("batter %q not found in this match stream", opts.BatterQuery)}, nil
+	}
+	if bowlerID == "" && normalizeAlias(bowlerName) == "" {
+		return NormalizedResult{Kind: EntityMatchDuel, Status: ResultStatusEmpty, Message: fmt.Sprintf("bowler %q not found in this match stream", opts.BowlerQuery)}, nil
+	}
+
+	runs := 0
+	dots := 0
+	fours := 0
+	sixes := 0
+	wickets := 0
+	balls := 0
+	recent := make([]DeliveryEvent, 0, 8)
+	lastUpdate := int64(0)
+	for _, delivery := range deliveries {
+		if !deliveryMatchesDuel(delivery, batterID, batterName, bowlerID, bowlerName) {
+			continue
+		}
+		balls++
+		if delivery.ScoreValue > 0 {
+			runs += delivery.ScoreValue
+		} else {
+			dots++
+		}
+		short := strings.ToUpper(strings.TrimSpace(delivery.ShortText))
+		if strings.Contains(short, "FOUR") {
+			fours++
+		}
+		if strings.Contains(short, "SIX") {
+			sixes++
+		}
+		if truthyField(delivery.Dismissal, "dismissal") {
+			wickets++
+		}
+		recent = append(recent, delivery)
+		if delivery.BBBTimestamp > lastUpdate {
+			lastUpdate = delivery.BBBTimestamp
+		}
+	}
+	if balls == 0 {
+		return NormalizedResult{
+			Kind:    EntityMatchDuel,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("no deliveries found for %s vs %s", nonEmpty(batterName, opts.BatterQuery), nonEmpty(bowlerName, opts.BowlerQuery)),
+		}, nil
+	}
+	if len(recent) > 8 {
+		recent = recent[len(recent)-8:]
+	}
+	liveScore := firstNonEmpty(matchScoreLabel(matchLatest.HomeScore), matchScoreLabel(matchLatest.AwayScore), lookup.match.ScoreSummary)
+	liveOver := overBallString(matchLatest.OverNumber, matchLatest.BallNumber)
+	duelScore := liveScore
+	if liveScore != "" && liveOver != "" {
+		duelScore = fmt.Sprintf("%s (%s ov)", liveScore, liveOver)
+	}
+
+	duel := MatchDuel{
+		MatchID:      lookup.match.ID,
+		Fixture:      nonEmpty(lookup.match.ShortDescription, lookup.match.Description),
+		Score:        duelScore,
+		BatterID:     batterID,
+		BatterName:   nonEmpty(batterName, opts.BatterQuery),
+		BowlerID:     bowlerID,
+		BowlerName:   nonEmpty(bowlerName, opts.BowlerQuery),
+		Balls:        balls,
+		Runs:         runs,
+		Dots:         dots,
+		Fours:        fours,
+		Sixes:        sixes,
+		Wickets:      wickets,
+		StrikeRate:   strikeRate(runs, balls),
+		RecentBalls:  recent,
+		LastUpdateMS: lastUpdate,
+		SnapshotAt:   time.Now().UTC().Format(time.RFC3339),
+		SourceRoute:  primaryRef,
+	}
+
+	allWarnings := append([]string{}, lookup.warnings...)
+	allWarnings = append(allWarnings, hydrationWarnings...)
+	allWarnings = append(allWarnings, warnings...)
+	result := NewDataResult(EntityMatchDuel, duel)
+	if len(allWarnings) > 0 {
+		result = NewPartialResult(EntityMatchDuel, duel, allWarnings...)
 	}
 	result.RequestedRef = lookup.resolved.RequestedRef
 	result.CanonicalRef = lookup.resolved.CanonicalRef
@@ -1443,10 +1610,151 @@ func (s *MatchService) loadDeliveryEvents(ctx context.Context, refs []Ref) ([]De
 			continue
 		}
 		if result.delivery != nil {
-			deliveries = append(deliveries, *result.delivery)
+			if isRenderableDelivery(*result.delivery) {
+				deliveries = append(deliveries, *result.delivery)
+			}
 		}
 	}
 	return deliveries, compactWarnings(warnings)
+}
+
+func (s *MatchService) deliveryEventsForMatchRefs(ctx context.Context, primaryRef string, alternateRefs ...string) ([]DeliveryEvent, []string, error) {
+	primaryRef = strings.TrimSpace(primaryRef)
+	primaryEvents, primaryWarnings, primaryErr := s.loadDeliveryEventsFromRoute(ctx, primaryRef)
+	if primaryErr == nil && len(primaryEvents) > 0 && len(primaryWarnings) == 0 {
+		return primaryEvents, nil, nil
+	}
+
+	merged := append([]DeliveryEvent{}, primaryEvents...)
+	warnings := append([]string{}, primaryWarnings...)
+	if primaryErr != nil {
+		warnings = append(warnings, fmt.Sprintf("delivery route %s: %v", primaryRef, primaryErr))
+	}
+
+	for _, ref := range alternateRefs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" || ref == primaryRef {
+			continue
+		}
+		events, routeWarnings, err := s.loadDeliveryEventsFromRoute(ctx, ref)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("delivery route %s: %v", ref, err))
+			continue
+		}
+		warnings = append(warnings, routeWarnings...)
+		merged = append(merged, events...)
+	}
+
+	merged = dedupeDeliveryEvents(merged)
+	sortDeliveryEvents(merged)
+	if len(merged) == 0 && primaryErr != nil {
+		return nil, compactWarnings(warnings), primaryErr
+	}
+	return merged, compactWarnings(warnings), nil
+}
+
+func (s *MatchService) loadDeliveryEventsFromRoute(ctx context.Context, ref string) ([]DeliveryEvent, []string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, nil, fmt.Errorf("empty delivery route")
+	}
+	resolved, err := s.resolveRefChainResilient(ctx, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	pageItems, pageWarnings, err := s.resolvePageRefs(ctx, resolved)
+	if err != nil {
+		return nil, nil, err
+	}
+	loaded, loadWarnings := s.loadDeliveryEvents(ctx, pageItems)
+	warnings := make([]string, 0, len(pageWarnings)+len(loadWarnings))
+	warnings = append(warnings, pageWarnings...)
+	warnings = append(warnings, loadWarnings...)
+	return loaded, compactWarnings(warnings), nil
+}
+
+func (s *MatchService) loadRecentDeliveryEventsFromRoute(ctx context.Context, ref string, maxItems int) ([]DeliveryEvent, []string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, nil, fmt.Errorf("empty delivery route")
+	}
+	resolved, err := s.resolveRefChainResilient(ctx, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	pageItems, pageWarnings, err := s.resolvePageRefs(ctx, resolved)
+	if err != nil {
+		return nil, nil, err
+	}
+	if maxItems > 0 && len(pageItems) > maxItems {
+		pageItems = append([]Ref(nil), pageItems[len(pageItems)-maxItems:]...)
+	}
+	loaded, loadWarnings := s.loadDeliveryEvents(ctx, pageItems)
+	warnings := make([]string, 0, len(pageWarnings)+len(loadWarnings))
+	warnings = append(warnings, pageWarnings...)
+	warnings = append(warnings, loadWarnings...)
+	return loaded, compactWarnings(warnings), nil
+}
+
+func isRenderableDelivery(delivery DeliveryEvent) bool {
+	if delivery.OverNumber > 0 && delivery.BallNumber > 0 {
+		return true
+	}
+	text := strings.TrimSpace(firstNonEmpty(delivery.ShortText, delivery.Text))
+	if text == "" || text == "/" || text == "-" {
+		return false
+	}
+	lowered := strings.ToLower(text)
+	return !strings.Contains(lowered, "over - ball")
+}
+
+func sortDeliveryEvents(deliveries []DeliveryEvent) {
+	sort.SliceStable(deliveries, func(i, j int) bool {
+		if deliveries[i].Period != deliveries[j].Period {
+			return deliveries[i].Period < deliveries[j].Period
+		}
+		if deliveries[i].OverNumber != deliveries[j].OverNumber {
+			return deliveries[i].OverNumber < deliveries[j].OverNumber
+		}
+		if deliveries[i].BallNumber != deliveries[j].BallNumber {
+			return deliveries[i].BallNumber < deliveries[j].BallNumber
+		}
+		if deliveries[i].Sequence != deliveries[j].Sequence {
+			return deliveries[i].Sequence < deliveries[j].Sequence
+		}
+		return deliveries[i].BBBTimestamp < deliveries[j].BBBTimestamp
+	})
+}
+
+func dedupeDeliveryEvents(deliveries []DeliveryEvent) []DeliveryEvent {
+	if len(deliveries) <= 1 {
+		return deliveries
+	}
+	seen := map[string]int{}
+	out := make([]DeliveryEvent, 0, len(deliveries))
+	for _, delivery := range deliveries {
+		key := strings.TrimSpace(delivery.ID)
+		if key == "" {
+			key = fmt.Sprintf("%d|%d|%d|%d|%s|%s|%s",
+				delivery.Period,
+				delivery.OverNumber,
+				delivery.BallNumber,
+				delivery.Sequence,
+				strings.TrimSpace(delivery.ShortText),
+				strings.TrimSpace(delivery.HomeScore),
+				strings.TrimSpace(delivery.AwayScore),
+			)
+		}
+		if idx, ok := seen[key]; ok {
+			if delivery.Sequence > out[idx].Sequence || delivery.BBBTimestamp > out[idx].BBBTimestamp {
+				out[idx] = delivery
+			}
+			continue
+		}
+		seen[key] = len(out)
+		out = append(out, delivery)
+	}
+	return out
 }
 
 type selectedInningsContext struct {
@@ -2301,38 +2609,36 @@ func extensionRef(extensions map[string]any, key string) string {
 
 func (s *MatchService) buildLiveView(ctx context.Context, match Match) (*MatchLiveView, []string) {
 	detailsRef := nonEmpty(strings.TrimSpace(match.DetailsRef), matchSubresourceRef(match, "details", "details"))
-	if detailsRef == "" {
+	playsRef := matchSubresourceRef(match, "plays", "plays")
+	if detailsRef == "" && playsRef == "" {
 		return nil, nil
 	}
-
-	resolved, err := s.resolveRefChainResilient(ctx, detailsRef)
+	primaryRef := nonEmpty(detailsRef, playsRef)
+	deliveries, warnings, err := s.loadRecentDeliveryEventsFromRoute(ctx, primaryRef, liveViewRecentDeliveryFetchCount)
 	if err != nil {
-		return nil, []string{fmt.Sprintf("details %s: %v", detailsRef, err)}
+		warnings = append(warnings, fmt.Sprintf("live deliveries %s: %v", primaryRef, err))
+		deliveries = nil
 	}
-	pageItems, pageWarnings, err := s.resolvePageRefs(ctx, resolved)
-	if err != nil {
-		return nil, []string{fmt.Sprintf("details %s: %v", resolved.CanonicalRef, err)}
+	if len(deliveries) < 6 || len(warnings) > 0 {
+		alternate := strings.TrimSpace(playsRef)
+		if alternate != "" && alternate != primaryRef {
+			altDeliveries, altWarnings, altErr := s.loadRecentDeliveryEventsFromRoute(ctx, alternate, liveViewRecentDeliveryFetchCount)
+			if altErr != nil {
+				warnings = append(warnings, fmt.Sprintf("live deliveries %s: %v", alternate, altErr))
+			} else if len(altDeliveries) > 0 {
+				deliveries = append(deliveries, altDeliveries...)
+				warnings = append(warnings, altWarnings...)
+			}
+		}
 	}
-	deliveries, deliveryWarnings := s.loadDeliveryEvents(ctx, pageItems)
+	deliveries = dedupeDeliveryEvents(deliveries)
+	sortDeliveryEvents(deliveries)
 	if len(deliveries) == 0 {
-		return nil, compactWarnings(append(pageWarnings, deliveryWarnings...))
+		return nil, warnings
 	}
-
-	sort.SliceStable(deliveries, func(i, j int) bool {
-		if deliveries[i].OverNumber != deliveries[j].OverNumber {
-			return deliveries[i].OverNumber < deliveries[j].OverNumber
-		}
-		if deliveries[i].BallNumber != deliveries[j].BallNumber {
-			return deliveries[i].BallNumber < deliveries[j].BallNumber
-		}
-		if deliveries[i].Sequence != deliveries[j].Sequence {
-			return deliveries[i].Sequence < deliveries[j].Sequence
-		}
-		return deliveries[i].BBBTimestamp < deliveries[j].BBBTimestamp
-	})
 	latest := deliveries[len(deliveries)-1]
 
-	nameMap, rosterWarnings := s.matchPlayerNameMap(ctx, match)
+	nameMap := map[string]string{}
 	for _, event := range deliveries {
 		bowlerName, batsmanName := parseNamesFromDeliveryShortText(event.ShortText)
 		if strings.TrimSpace(event.BowlerPlayerID) != "" && strings.TrimSpace(bowlerName) != "" {
@@ -2346,11 +2652,6 @@ func (s *MatchService) buildLiveView(ctx context.Context, match Match) (*MatchLi
 			}
 		}
 	}
-	warnings := make([]string, 0)
-	warnings = append(warnings, pageWarnings...)
-	warnings = append(warnings, deliveryWarnings...)
-	warnings = append(warnings, rosterWarnings...)
-
 	score := firstNonEmpty(matchScoreLabel(latest.HomeScore), matchScoreLabel(latest.AwayScore))
 	if score == "" {
 		score = match.ScoreSummary
@@ -2438,7 +2739,14 @@ func (s *MatchService) buildLiveView(ctx context.Context, match Match) (*MatchLi
 		Bowlers:      bowlers,
 		RecentBalls:  recent,
 		CurrentBalls: currentOver,
+		LastDetailID: strings.TrimSpace(latest.ID),
+		LastUpdateMS: latest.BBBTimestamp,
+		SnapshotAt:   time.Now().UTC().Format(time.RFC3339),
+		SourceRoute:  primaryRef,
 	}
+	stale, reason := detectLiveStaleness(match.ScoreSummary, score)
+	view.Stale = stale
+	view.StaleReason = reason
 	return view, compactWarnings(warnings)
 }
 
@@ -2486,57 +2794,6 @@ func augmentScorecardFromLive(scorecard *MatchScorecard, live *MatchLiveView) {
 		}
 		scorecard.BowlingCards = append(scorecard.BowlingCards, card)
 	}
-}
-
-func (s *MatchService) matchPlayerNameMap(ctx context.Context, match Match) (map[string]string, []string) {
-	names := map[string]string{}
-	sem := make(chan struct{}, matchLineupRosterFetchConcurrency)
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	warnings := make([]string, 0)
-
-	for _, team := range match.Teams {
-		team := team
-		rosterRef := nonEmpty(strings.TrimSpace(team.RosterRef), competitorSubresourceRef(match, team.ID, "roster"))
-		if rosterRef == "" {
-			continue
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			reqCtx, cancel := context.WithTimeout(ctx, matchLineupRosterFetchTimeout)
-			resolved, err := s.resolveRefChainResilient(reqCtx, rosterRef)
-			cancel()
-			if err != nil {
-				mu.Lock()
-				warnings = append(warnings, fmt.Sprintf("roster %s: %v", rosterRef, err))
-				mu.Unlock()
-				return
-			}
-			entries, err := NormalizeTeamRosterEntries(resolved.Body, team, TeamScopeMatch, match.ID)
-			if err != nil {
-				mu.Lock()
-				warnings = append(warnings, fmt.Sprintf("roster %s: %v", resolved.CanonicalRef, err))
-				mu.Unlock()
-				return
-			}
-			mu.Lock()
-			for _, entry := range entries {
-				playerID := strings.TrimSpace(entry.PlayerID)
-				name := strings.TrimSpace(entry.DisplayName)
-				if playerID == "" || name == "" {
-					continue
-				}
-				names[playerID] = name
-			}
-			mu.Unlock()
-		}()
-	}
-	wg.Wait()
-	return names, compactWarnings(warnings)
 }
 
 func strikeRate(runs, balls int) float64 {
@@ -2614,6 +2871,99 @@ func parseNamesFromDeliveryShortText(shortText string) (string, string) {
 	}
 	batsman := strings.TrimSpace(commaParts[0])
 	return bowler, batsman
+}
+
+func detectLiveStaleness(matchScore, liveScore string) (bool, string) {
+	matchRuns, matchWkts, okMatch := parseRunsWkts(matchScore)
+	liveRuns, liveWkts, okLive := parseRunsWkts(liveScore)
+	if !okMatch || !okLive {
+		return false, ""
+	}
+	if liveRuns < matchRuns || liveWkts < matchWkts {
+		return true, fmt.Sprintf("live snapshot %d/%d trails match summary %d/%d", liveRuns, liveWkts, matchRuns, matchWkts)
+	}
+	return false, ""
+}
+
+func parseRunsWkts(raw string) (int, int, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, 0, false
+	}
+	idx := strings.Index(raw, "/")
+	if idx <= 0 || idx >= len(raw)-1 {
+		return 0, 0, false
+	}
+	left := idx - 1
+	for left >= 0 && raw[left] >= '0' && raw[left] <= '9' {
+		left--
+	}
+	right := idx + 1
+	for right < len(raw) && raw[right] >= '0' && raw[right] <= '9' {
+		right++
+	}
+	runStr := strings.TrimSpace(raw[left+1 : idx])
+	wktStr := strings.TrimSpace(raw[idx+1 : right])
+	runs, err1 := strconv.Atoi(runStr)
+	wkts, err2 := strconv.Atoi(wktStr)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return runs, wkts, true
+}
+
+func resolveDuelIdentity(deliveries []DeliveryEvent, query string, isBatter bool) (string, string) {
+	q := normalizeAlias(query)
+	if q == "" {
+		return "", ""
+	}
+
+	type candidate struct {
+		id    string
+		name  string
+		score int
+	}
+	best := candidate{}
+	for _, delivery := range deliveries {
+		bowlerName, batsmanName := parseNamesFromDeliveryShortText(delivery.ShortText)
+		id := delivery.BowlerPlayerID
+		name := bowlerName
+		if isBatter {
+			id = delivery.BatsmanPlayerID
+			name = batsmanName
+		}
+		if strings.TrimSpace(id) == "" && strings.TrimSpace(name) == "" {
+			continue
+		}
+		score := aliasMatchScore(normalizeAlias(nonEmpty(name, id)), q, strings.Fields(q))
+		if normalizeAlias(id) == q {
+			score = 1000
+		}
+		if score > best.score {
+			best = candidate{id: strings.TrimSpace(id), name: strings.TrimSpace(name), score: score}
+		}
+	}
+	if best.score >= 300 || best.score == 1000 {
+		return best.id, best.name
+	}
+	return "", ""
+}
+
+func deliveryMatchesDuel(delivery DeliveryEvent, batterID, batterName, bowlerID, bowlerName string) bool {
+	shortBowler, shortBatter := parseNamesFromDeliveryShortText(delivery.ShortText)
+	batterMatch := strings.TrimSpace(batterID) != "" && strings.TrimSpace(delivery.BatsmanPlayerID) == strings.TrimSpace(batterID)
+	if !batterMatch && normalizeAlias(batterName) != "" {
+		batterMatch = normalizeAlias(shortBatter) == normalizeAlias(batterName)
+	}
+	if !batterMatch {
+		return false
+	}
+
+	bowlerMatch := strings.TrimSpace(bowlerID) != "" && strings.TrimSpace(delivery.BowlerPlayerID) == strings.TrimSpace(bowlerID)
+	if !bowlerMatch && normalizeAlias(bowlerName) != "" {
+		bowlerMatch = normalizeAlias(shortBowler) == normalizeAlias(bowlerName)
+	}
+	return bowlerMatch
 }
 
 func matchScoreLabel(raw string) string {
