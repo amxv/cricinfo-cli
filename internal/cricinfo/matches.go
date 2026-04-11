@@ -17,6 +17,8 @@ const matchListEventFetchConcurrency = 3
 const matchListStatusFetchConcurrency = 3
 const matchListEventFetchTimeout = 4500 * time.Millisecond
 const matchListStatusFetchTimeout = 4 * time.Second
+const matchLineupRosterFetchConcurrency = 2
+const matchLineupRosterFetchTimeout = 5 * time.Second
 const deliveryFetchConcurrency = 96
 const detailSubresourceFetchConcurrency = 24
 const detailItemFetchTimeout = 3 * time.Second
@@ -101,6 +103,124 @@ func (s *MatchService) List(ctx context.Context, opts MatchListOptions) (Normali
 // Live discovers current in-progress matches from /events.
 func (s *MatchService) Live(ctx context.Context, opts MatchListOptions) (NormalizedResult, error) {
 	return s.listFromEvents(ctx, opts, true)
+}
+
+// Lineups resolves one match and returns match-scoped roster entries for both teams.
+func (s *MatchService) Lineups(ctx context.Context, query string, opts MatchLookupOptions) (NormalizedResult, error) {
+	lookup, passthrough := s.resolveMatchLookup(ctx, query, opts)
+	if passthrough != nil {
+		passthrough.Kind = EntityTeamRoster
+		return *passthrough, nil
+	}
+
+	if len(lookup.match.Teams) == 0 {
+		return NormalizedResult{
+			Kind:    EntityTeamRoster,
+			Status:  ResultStatusEmpty,
+			Message: fmt.Sprintf("no teams found for match %q", lookup.match.ID),
+		}, nil
+	}
+
+	type lineupLoadResult struct {
+		entries []TeamRosterEntry
+		warns   []string
+	}
+
+	results := make([]lineupLoadResult, len(lookup.match.Teams))
+	sem := make(chan struct{}, matchLineupRosterFetchConcurrency)
+	var wg sync.WaitGroup
+	teamCache := map[string]teamIdentity{}
+
+	teamService := &TeamService{
+		client:   s.client,
+		resolver: s.resolver,
+	}
+
+	for i := range lookup.match.Teams {
+		team := lookup.match.Teams[i]
+		teamID := strings.TrimSpace(team.ID)
+		if teamID == "" {
+			teamID = strings.TrimSpace(refIDs(team.Ref)["teamId"])
+		}
+		if teamID == "" {
+			teamID = strings.TrimSpace(refIDs(team.Ref)["competitorId"])
+		}
+		if teamID == "" {
+			results[i].warns = []string{fmt.Sprintf("skip team with missing id/ref in match %q", lookup.match.ID)}
+			continue
+		}
+		team.ID = teamID
+		if strings.TrimSpace(team.Name) == "" || strings.TrimSpace(team.ShortName) == "" {
+			identity, err := s.fetchTeamIdentity(ctx, &team, teamCache)
+			if err != nil {
+				results[i].warns = append(results[i].warns, fmt.Sprintf("team %s: %v", nonEmpty(team.Ref, team.ID), err))
+			} else {
+				team.Name = nonEmpty(team.Name, identity.name)
+				team.ShortName = nonEmpty(team.ShortName, identity.shortName)
+			}
+		}
+
+		wg.Add(1)
+		go func(index int, team Team) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			rosterRef := nonEmpty(strings.TrimSpace(team.RosterRef), competitorSubresourceRef(*lookup.match, team.ID, "roster"))
+			if rosterRef == "" {
+				results[index].warns = []string{fmt.Sprintf("roster route unavailable for team %q", team.ID)}
+				return
+			}
+
+			reqCtx, cancel := context.WithTimeout(ctx, matchLineupRosterFetchTimeout)
+			resolved, err := s.client.ResolveRefChain(reqCtx, rosterRef)
+			cancel()
+			if err != nil {
+				results[index].warns = []string{fmt.Sprintf("roster %s: %v", rosterRef, err)}
+				return
+			}
+
+			entries, err := NormalizeTeamRosterEntries(resolved.Body, team, TeamScopeMatch, lookup.match.ID)
+			if err != nil {
+				results[index].warns = []string{fmt.Sprintf("roster %s: %v", resolved.CanonicalRef, err)}
+				return
+			}
+
+			for i := range entries {
+				entries[i].TeamName = nonEmpty(entries[i].TeamName, team.ShortName, team.Name, team.ID)
+			}
+
+			reqCtx, cancel = context.WithTimeout(ctx, matchLineupRosterFetchTimeout)
+			hydrateWarnings := teamService.enrichRosterEntries(reqCtx, entries)
+			cancel()
+			results[index] = lineupLoadResult{
+				entries: entries,
+				warns:   hydrateWarnings,
+			}
+		}(i, team)
+	}
+
+	wg.Wait()
+
+	warnings := append([]string{}, lookup.warnings...)
+	items := make([]any, 0)
+	for i := range results {
+		warnings = append(warnings, results[i].warns...)
+		for _, entry := range results[i].entries {
+			items = append(items, entry)
+		}
+	}
+
+	result := NewListResult(EntityTeamRoster, items)
+	if len(warnings) > 0 {
+		result = NewPartialListResult(EntityTeamRoster, items, compactWarnings(warnings)...)
+	}
+	result.RequestedRef = lookup.resolved.RequestedRef
+	result.CanonicalRef = lookup.resolved.CanonicalRef
+	if len(items) == 0 && strings.TrimSpace(result.Message) == "" {
+		result.Message = "no lineup entries found for this match"
+	}
+	return result, nil
 }
 
 // Show resolves and returns one match with normalized summary fields.

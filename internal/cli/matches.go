@@ -13,6 +13,7 @@ type matchCommandService interface {
 	Close() error
 	List(ctx context.Context, opts cricinfo.MatchListOptions) (cricinfo.NormalizedResult, error)
 	Live(ctx context.Context, opts cricinfo.MatchListOptions) (cricinfo.NormalizedResult, error)
+	Lineups(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Show(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Status(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
 	Scorecard(ctx context.Context, query string, opts cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error)
@@ -110,6 +111,26 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 	liveCmd.Flags().IntVar(&opts.limit, "limit", 20, "Maximum number of live matches to return")
+
+	lineupCmd := &cobra.Command{
+		Use:   "lineup <match>",
+		Short: "Show starting lineups for both teams in one match",
+		Long: strings.Join([]string{
+			"Resolve one match and return the match-scoped roster entries for both teams.",
+			"",
+			"Next steps:",
+			"  cricinfo matches scorecard <match>",
+			"  cricinfo matches status <match>",
+			"  cricinfo matches deliveries <match> --team <team> --innings <n> --period <n>",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchCommand(cmd, global, func(ctx context.Context, service matchCommandService) (cricinfo.NormalizedResult, error) {
+				return service.Lineups(ctx, query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+			})
+		},
+	}
 
 	showCmd := &cobra.Command{
 		Use:   "show <match>",
@@ -390,6 +411,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 	cmd.AddCommand(
 		liveCmd,
 		listCmd,
+		lineupCmd,
 		showCmd,
 		statusCmd,
 		scorecardCmd,

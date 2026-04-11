@@ -13,6 +13,7 @@ import (
 type fakeMatchService struct {
 	listResult      cricinfo.NormalizedResult
 	liveResult      cricinfo.NormalizedResult
+	lineupResult    cricinfo.NormalizedResult
 	showResult      cricinfo.NormalizedResult
 	statusResult    cricinfo.NormalizedResult
 	scorecardResult cricinfo.NormalizedResult
@@ -43,6 +44,10 @@ func (f *fakeMatchService) List(context.Context, cricinfo.MatchListOptions) (cri
 
 func (f *fakeMatchService) Live(context.Context, cricinfo.MatchListOptions) (cricinfo.NormalizedResult, error) {
 	return f.liveResult, nil
+}
+
+func (f *fakeMatchService) Lineups(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
+	return f.lineupResult, nil
 }
 
 func (f *fakeMatchService) Show(context.Context, string, cricinfo.MatchLookupOptions) (cricinfo.NormalizedResult, error) {
@@ -149,6 +154,7 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	service := &fakeMatchService{
 		listResult:      cricinfo.NewListResult(cricinfo.EntityMatch, []any{match}),
 		liveResult:      cricinfo.NewListResult(cricinfo.EntityMatch, []any{match}),
+		lineupResult:    cricinfo.NewListResult(cricinfo.EntityTeamRoster, []any{cricinfo.TeamRosterEntry{DisplayName: "Player One", TeamName: "BOOST"}}),
 		showResult:      cricinfo.NewDataResult(cricinfo.EntityMatch, match),
 		statusResult:    cricinfo.NewDataResult(cricinfo.EntityMatch, match),
 		scorecardResult: cricinfo.NewDataResult(cricinfo.EntityMatchScorecard, scorecard),
@@ -294,6 +300,15 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	}
 	if !strings.Contains(playsOut.String(), "Amanullah to Fazal Haq Shaheen, 1 run") {
 		t.Fatalf("expected plays text output to include normalized short text, got %q", playsOut.String())
+	}
+
+	var lineupOut bytes.Buffer
+	var lineupErr bytes.Buffer
+	if err := Run([]string{"matches", "lineup", "1529474", "--format", "text"}, &lineupOut, &lineupErr); err != nil {
+		t.Fatalf("Run matches lineup --format text error: %v", err)
+	}
+	if !strings.Contains(lineupOut.String(), "Player One") {
+		t.Fatalf("expected lineup text to include roster names, got %q", lineupOut.String())
 	}
 
 	var situationOut bytes.Buffer

@@ -488,6 +488,7 @@ type TeamRosterEntry struct {
 	PlayerRef     string         `json:"playerRef,omitempty"`
 	DisplayName   string         `json:"displayName,omitempty"`
 	TeamID        string         `json:"teamId,omitempty"`
+	TeamName      string         `json:"teamName,omitempty"`
 	TeamRef       string         `json:"teamRef,omitempty"`
 	MatchID       string         `json:"matchId,omitempty"`
 	Scope         TeamScope      `json:"scope,omitempty"`

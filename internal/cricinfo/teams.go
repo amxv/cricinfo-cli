@@ -4,7 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 )
+
+const teamRosterNameHydrationConcurrency = 8
+const teamRosterNameHydrationTimeout = 2500 * time.Millisecond
 
 // TeamServiceConfig configures team discovery and match-scoped team commands.
 type TeamServiceConfig struct {
@@ -125,7 +130,7 @@ func (s *TeamService) Roster(ctx context.Context, teamQuery string, opts TeamLoo
 		return NormalizedResult{}, fmt.Errorf("normalize team roster %q: %w", resolved.CanonicalRef, err)
 	}
 
-	s.enrichRosterEntries(entries)
+	warnings = append(warnings, s.enrichRosterEntries(ctx, entries)...)
 
 	items := make([]any, 0, len(entries))
 	for _, entry := range entries {
@@ -441,26 +446,124 @@ func (s *TeamService) fetchGlobalTeam(ctx context.Context, entity IndexedEntity)
 	return *team, resolved, ""
 }
 
-func (s *TeamService) enrichRosterEntries(entries []TeamRosterEntry) {
+func (s *TeamService) enrichRosterEntries(ctx context.Context, entries []TeamRosterEntry) []string {
 	if s.resolver == nil || s.resolver.index == nil {
-		return
+		return nil
 	}
 
+	missing := make([]int, 0)
 	for i := range entries {
-		if strings.TrimSpace(entries[i].PlayerID) == "" {
+		playerID := strings.TrimSpace(entries[i].PlayerID)
+		if playerID == "" {
+			playerID = strings.TrimSpace(refIDs(entries[i].PlayerRef)["athleteId"])
+			entries[i].PlayerID = playerID
+		}
+		if playerID == "" {
 			continue
 		}
-		player, ok := s.resolver.index.FindByID(EntityPlayer, entries[i].PlayerID)
+		player, ok := s.resolver.index.FindByID(EntityPlayer, playerID)
 		if !ok {
+			missing = append(missing, i)
 			continue
 		}
 		if strings.TrimSpace(entries[i].DisplayName) == "" {
-			entries[i].DisplayName = nonEmpty(player.Name, player.ShortName)
+			entries[i].DisplayName = nonEmpty(player.Name, player.ShortName, player.ID)
 		}
 		if strings.TrimSpace(entries[i].PlayerRef) == "" {
 			entries[i].PlayerRef = strings.TrimSpace(player.Ref)
 		}
 	}
+
+	if len(missing) == 0 {
+		return nil
+	}
+
+	type hydrateResult struct {
+		index       int
+		displayName string
+		playerRef   string
+		warning     string
+	}
+
+	results := make([]hydrateResult, len(missing))
+	sem := make(chan struct{}, teamRosterNameHydrationConcurrency)
+	var wg sync.WaitGroup
+
+	for resultIndex, entryIndex := range missing {
+		wg.Add(1)
+		go func(resultIndex, entryIndex int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			entry := entries[entryIndex]
+			playerID := strings.TrimSpace(entry.PlayerID)
+			playerRef := strings.TrimSpace(entry.PlayerRef)
+			if playerID == "" {
+				playerID = strings.TrimSpace(refIDs(playerRef)["athleteId"])
+			}
+			if playerID == "" && playerRef == "" {
+				results[resultIndex] = hydrateResult{
+					index:   entryIndex,
+					warning: "roster entry missing player id/ref",
+				}
+				return
+			}
+
+			reqCtx, cancel := context.WithTimeout(ctx, teamRosterNameHydrationTimeout)
+			var seedErr error
+			if playerID != "" {
+				seedErr = s.resolver.seedPlayerByID(reqCtx, playerID, "", strings.TrimSpace(entry.MatchID))
+			} else {
+				seedErr = s.resolver.seedPlayerRef(reqCtx, playerRef, "", strings.TrimSpace(entry.MatchID))
+			}
+			cancel()
+
+			if playerID == "" {
+				playerID = strings.TrimSpace(refIDs(playerRef)["athleteId"])
+			}
+
+			player := IndexedEntity{}
+			ok := false
+			if playerID != "" {
+				player, ok = s.resolver.index.FindByID(EntityPlayer, playerID)
+			}
+			if !ok && playerRef != "" {
+				player, ok = s.resolver.index.FindByRef(EntityPlayer, playerRef)
+			}
+
+			result := hydrateResult{index: entryIndex}
+			if ok {
+				result.displayName = nonEmpty(strings.TrimSpace(player.Name), strings.TrimSpace(player.ShortName), strings.TrimSpace(player.ID))
+				result.playerRef = strings.TrimSpace(player.Ref)
+			}
+			if seedErr != nil && result.displayName == "" {
+				label := nonEmpty(playerID, playerRef, fmt.Sprintf("entry-%d", entryIndex+1))
+				result.warning = fmt.Sprintf("player %s: %v", label, seedErr)
+			}
+			results[resultIndex] = result
+		}(resultIndex, entryIndex)
+	}
+
+	wg.Wait()
+
+	warnings := make([]string, 0)
+	for _, result := range results {
+		if result.index < 0 || result.index >= len(entries) {
+			continue
+		}
+		if strings.TrimSpace(entries[result.index].DisplayName) == "" && strings.TrimSpace(result.displayName) != "" {
+			entries[result.index].DisplayName = result.displayName
+		}
+		if strings.TrimSpace(entries[result.index].PlayerRef) == "" && strings.TrimSpace(result.playerRef) != "" {
+			entries[result.index].PlayerRef = result.playerRef
+		}
+		if result.warning != "" {
+			warnings = append(warnings, result.warning)
+		}
+	}
+
+	return compactWarnings(warnings)
 }
 
 func (s *TeamService) enrichTeamLeaders(ctx context.Context, leaders *TeamLeaders) {

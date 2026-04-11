@@ -223,6 +223,7 @@ func NormalizeTeamRosterEntries(data []byte, team Team, scope TeamScope, matchID
 			PlayerRef:     athleteRef,
 			DisplayName:   displayName,
 			TeamID:        team.ID,
+			TeamName:      nonEmpty(team.ShortName, team.Name, team.ID),
 			TeamRef:       team.Ref,
 			MatchID:       strings.TrimSpace(matchID),
 			Scope:         scope,
@@ -260,6 +261,7 @@ func NormalizeTeamAthletePage(data []byte, team Team) ([]TeamRosterEntry, error)
 			PlayerID:  refIDs(playerRef)["athleteId"],
 			PlayerRef: playerRef,
 			TeamID:    team.ID,
+			TeamName:  nonEmpty(team.ShortName, team.Name, team.ID),
 			TeamRef:   team.Ref,
 			Scope:     TeamScopeGlobal,
 		})

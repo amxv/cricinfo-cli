@@ -520,7 +520,15 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		name := firstNonEmpty(valueString(entity, "name"), valueString(entity, "shortName"), valueString(entity, "id"))
 		return joinParts(name, bracket(valueString(entity, "homeAway")))
 	case EntityTeamRoster:
-		name := firstNonEmpty(valueString(entity, "displayName"), valueString(entity, "playerId"), valueString(entity, "athleteId"))
+		name := strings.TrimSpace(valueString(entity, "displayName"))
+		if name == "" {
+			playerID := firstNonEmpty(valueString(entity, "playerId"), valueString(entity, "athleteId"))
+			if playerID != "" {
+				name = "Unknown player (" + playerID + ")"
+			} else {
+				name = "Unknown player"
+			}
+		}
 		badges := []string{}
 		if valueString(entity, "captain") == "true" {
 			badges = append(badges, "captain")
@@ -528,7 +536,7 @@ func summarizeEntity(entity map[string]any, kind EntityKind, verbose bool) strin
 		if valueString(entity, "active") == "true" {
 			badges = append(badges, "active")
 		}
-		return joinParts(name, strings.Join(badges, ", "))
+		return joinParts(name, firstNonEmpty(valueString(entity, "teamName"), valueString(entity, "teamId")), strings.Join(badges, ", "))
 	case EntityTeamScore:
 		return joinParts(valueString(entity, "displayValue"), valueString(entity, "value"), bracket(valueString(entity, "source")))
 	case EntityTeamLeaders:
