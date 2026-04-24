@@ -616,6 +616,8 @@ func runMatchPitchMapCommand(cmd *cobra.Command, global *globalOptions, opts *ma
 		if matchID != "" && leagueID != "" {
 			if bundle, err := fetchSiteAPIPitchMapGrid(cmd.Context(), leagueID, matchID, opts.player); err == nil && (len(bundle.RHB) > 0 || len(bundle.LHB) > 0) {
 				renderSiteAPIPitchMapGrid(cmd.OutOrStdout(), bundle)
+			} else if batting, berr := fetchSiteAPIBattingWagonMap(cmd.Context(), leagueID, matchID, opts.player); berr == nil && len(batting.ZoneRuns) > 0 {
+				renderSiteAPIBattingWagonMap(cmd.OutOrStdout(), batting)
 			}
 		}
 	}
@@ -762,6 +764,14 @@ type sitePitchMapBundle struct {
 	PlayerName string
 	RHB        [][]int
 	LHB        [][]int
+}
+
+type siteBattingMapBundle struct {
+	PlayerName string
+	ZoneRuns   []int
+	ZoneShots  []int
+	TotalRuns  int
+	TotalShots int
 }
 
 func fetchSiteAPIPitchMapGrid(ctx context.Context, leagueID, matchID, playerFilter string) (sitePitchMapBundle, error) {
@@ -1052,6 +1062,140 @@ func topPitchMapHotspots(grid [][]int, limit int) []string {
 		out = append(out, "No hotspot cells available")
 	}
 	return out
+}
+
+func fetchSiteAPIBattingWagonMap(ctx context.Context, leagueID, matchID, playerFilter string) (siteBattingMapBundle, error) {
+	u := "https://site.api.espn.com/apis/site/v2/sports/cricket/" + url.PathEscape(strings.TrimSpace(leagueID)) + "/summary?event=" + url.QueryEscape(strings.TrimSpace(matchID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return siteBattingMapBundle{}, err
+	}
+	req.Header.Set("User-Agent", "cricinfo-cli/batting-map")
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return siteBattingMapBundle{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return siteBattingMapBundle{}, fmt.Errorf("site api status %d", resp.StatusCode)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return siteBattingMapBundle{}, err
+	}
+
+	filter := strings.ToLower(strings.TrimSpace(playerFilter))
+	rosters := mapSliceValue(payload, "rosters")
+	for _, rosterRaw := range rosters {
+		roster := mapValue(rosterRaw)
+		players := mapSliceValue(roster, "roster")
+		for _, playerRaw := range players {
+			player := mapValue(playerRaw)
+			athlete := mapValue(player["athlete"])
+			playerID := strings.TrimSpace(valueString(athlete, "id"))
+			displayName := strings.TrimSpace(valueString(athlete, "displayName"))
+			fullName := strings.TrimSpace(valueString(athlete, "fullName"))
+			if !playerFilterMatches(filter, playerID, displayName, fullName) {
+				continue
+			}
+
+			linescores := mapSliceValue(player, "linescores")
+			for _, lsRaw := range linescores {
+				ls := mapValue(lsRaw)
+				innings := mapSliceValue(ls, "linescores")
+				for _, innRaw := range innings {
+					inn := mapValue(innRaw)
+					stats := mapValue(inn["statistics"])
+					batting := mapValue(stats["batting"])
+					wagonRaw := mapSliceValue(batting, "wagonZone")
+					if len(wagonRaw) == 0 {
+						continue
+					}
+					runs := make([]int, 0, len(wagonRaw))
+					shots := make([]int, 0, len(wagonRaw))
+					totalRuns := 0
+					totalShots := 0
+					for _, zoneRaw := range wagonRaw {
+						zone := mapValue(zoneRaw)
+						r := intValue(zone["runs"])
+						s := intValue(zone["scoringShots"])
+						runs = append(runs, r)
+						shots = append(shots, s)
+						totalRuns += r
+						totalShots += s
+					}
+					if totalRuns > 0 || totalShots > 0 {
+						return siteBattingMapBundle{
+							PlayerName: nonEmpty(displayName, fullName, playerID),
+							ZoneRuns:   runs,
+							ZoneShots:  shots,
+							TotalRuns:  totalRuns,
+							TotalShots: totalShots,
+						}, nil
+					}
+				}
+			}
+		}
+	}
+	return siteBattingMapBundle{}, fmt.Errorf("no site-api batting wagon map for %q", playerFilter)
+}
+
+func renderSiteAPIBattingWagonMap(out io.Writer, bundle siteBattingMapBundle) {
+	if len(bundle.ZoneRuns) == 0 {
+		return
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Site API Batting Wagon Fallback (%s)\n", strings.TrimSpace(bundle.PlayerName))
+	fmt.Fprintln(out, "Guide:")
+	fmt.Fprintln(out, "  Zones use provider order Z1..Z8 (direction labels are provider-defined).")
+	fmt.Fprintln(out, "  Density legend by runs: .(1-4) o(5-9) O(10-14) #(15-24) @(25+)")
+	fmt.Fprintln(out)
+
+	get := func(i int) int {
+		if i < 0 || i >= len(bundle.ZoneRuns) {
+			return 0
+		}
+		return bundle.ZoneRuns[i]
+	}
+	g := func(i int) string {
+		v := get(i)
+		return fmt.Sprintf("%s%02d", string(battingDensityGlyph(v)), v)
+	}
+
+	fmt.Fprintf(out, "              [%s]\n", g(0))
+	fmt.Fprintf(out, "        [%s]         [%s]\n", g(7), g(1))
+	fmt.Fprintf(out, "        [%s]    []    [%s]\n", g(6), g(2))
+	fmt.Fprintf(out, "        [%s]         [%s]\n", g(5), g(3))
+	fmt.Fprintf(out, "              [%s]\n", g(4))
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Totals: %d runs from %d scoring shots\n", bundle.TotalRuns, bundle.TotalShots)
+	fmt.Fprintln(out, "Zone Breakdown:")
+	for i := 0; i < len(bundle.ZoneRuns); i++ {
+		shots := 0
+		if i < len(bundle.ZoneShots) {
+			shots = bundle.ZoneShots[i]
+		}
+		fmt.Fprintf(out, "  Z%d -> %d runs, %d shots\n", i+1, bundle.ZoneRuns[i], shots)
+	}
+}
+
+func battingDensityGlyph(v int) rune {
+	switch {
+	case v >= 25:
+		return '@'
+	case v >= 15:
+		return '#'
+	case v >= 10:
+		return 'O'
+	case v >= 5:
+		return 'o'
+	case v >= 1:
+		return '.'
+	default:
+		return ' '
+	}
 }
 
 func mapValue(raw any) map[string]any {
