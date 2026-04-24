@@ -788,7 +788,7 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 			"id", "matchId", "teamId", "period", "overNumber", "ballNumber", "scoreValue",
 			"shortText", "dismissalType", "dismissalName", "dismissalCard",
 			"batsmanPlayerId", "bowlerPlayerId", "fielderPlayerId",
-			"xCoordinate", "yCoordinate", "involvement",
+			"hawkeyeId", "xCoordinate", "yCoordinate", "involvement",
 		}
 	case EntityNewsArticle:
 		order = []string{"id", "headline", "title", "byline", "published", "description", "webUrl"}
@@ -818,7 +818,7 @@ func formatSingleEntity(entity map[string]any, kind EntityKind, opts RenderOptio
 	case EntityDeliveryEvent:
 		order = []string{
 			"id", "period", "overNumber", "ballNumber", "scoreValue", "shortText",
-			"playType", "dismissal", "dismissalType", "bbbTimestamp", "xCoordinate", "yCoordinate",
+			"playType", "dismissal", "dismissalType", "hawkeyeId", "speedKPH", "speedMPH", "bbbTimestamp", "xCoordinate", "yCoordinate",
 		}
 	case EntityMatchScorecard:
 		order = []string{"matchId", "competitionId", "eventId", "leagueId", "battingCards", "bowlingCards", "partnershipCards"}

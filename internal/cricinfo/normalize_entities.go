@@ -745,7 +745,9 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 		DismissalName:       nonEmpty(stringField(dismissal, "name"), stringField(dismissal, "type")),
 		DismissalCard:       stringField(dismissal, "dismissalCard"),
 		DismissalText:       stringField(dismissal, "text"),
+		HawkeyeID:           stringField(payload, "hawkeyeId"),
 		SpeedKPH:            floatField(payload, "speedKPH"),
+		SpeedMPH:            floatField(payload, "speedMPH"),
 		XCoordinate:         xCoordinate,
 		YCoordinate:         yCoordinate,
 		BBBTimestamp:        bbbTimestamp,
@@ -754,7 +756,7 @@ func NormalizeDeliveryEvent(data []byte) (*DeliveryEvent, error) {
 		Timestamp:           bbbTimestamp,
 		Extensions: extensionsFromMap(payload,
 			"$ref", "id", "period", "periodText", "over", "scoreValue", "shortText", "text", "homeScore", "awayScore",
-			"batsman", "bowler", "playType", "dismissal", "speedKPH", "xCoordinate", "yCoordinate", "bbbTimestamp",
+			"batsman", "bowler", "playType", "dismissal", "hawkeyeId", "speedKPH", "speedMPH", "xCoordinate", "yCoordinate", "bbbTimestamp",
 		),
 	}
 

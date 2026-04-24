@@ -816,7 +816,9 @@ type DeliveryEvent struct {
 	DismissalName       string         `json:"dismissalName,omitempty"`
 	DismissalCard       string         `json:"dismissalCard,omitempty"`
 	DismissalText       string         `json:"dismissalText,omitempty"`
+	HawkeyeID           string         `json:"hawkeyeId,omitempty"`
 	SpeedKPH            float64        `json:"speedKPH,omitempty"`
+	SpeedMPH            float64        `json:"speedMPH,omitempty"`
 	XCoordinate         *float64       `json:"xCoordinate"`
 	YCoordinate         *float64       `json:"yCoordinate"`
 	BBBTimestamp        int64          `json:"bbbTimestamp"`

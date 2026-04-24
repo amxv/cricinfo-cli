@@ -150,6 +150,9 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 		ScoreValue:   1,
 		Dismissal:    map[string]any{"dismissal": false, "type": ""},
 		PlayType:     map[string]any{"id": "1", "description": "run"},
+		HawkeyeID:    "hk-110",
+		SpeedKPH:     131.4,
+		SpeedMPH:     81.6,
 		BBBTimestamp: 0,
 		XCoordinate:  &x,
 		YCoordinate:  &y,
@@ -327,6 +330,9 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	}
 	if _, ok := first["yCoordinate"]; !ok {
 		t.Fatalf("expected yCoordinate field in details json output")
+	}
+	if got := first["hawkeyeId"]; got != "hk-110" {
+		t.Fatalf("expected hawkeyeId in details json output, got %#v", got)
 	}
 
 	var playsOut bytes.Buffer
