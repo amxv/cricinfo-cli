@@ -614,8 +614,8 @@ func runMatchPitchMapCommand(cmd *cobra.Command, global *globalOptions, opts *ma
 		}
 		matchID := strings.TrimSpace(query)
 		if matchID != "" && leagueID != "" {
-			if grid, matchedName, err := fetchSiteAPIPitchMapGrid(cmd.Context(), leagueID, matchID, opts.player); err == nil && len(grid) > 0 {
-				renderSiteAPIPitchMapGrid(cmd.OutOrStdout(), matchedName, grid)
+			if bundle, err := fetchSiteAPIPitchMapGrid(cmd.Context(), leagueID, matchID, opts.player); err == nil && (len(bundle.RHB) > 0 || len(bundle.LHB) > 0) {
+				renderSiteAPIPitchMapGrid(cmd.OutOrStdout(), bundle)
 			}
 		}
 	}
@@ -758,26 +758,32 @@ func filterDeliveriesByPlayer(deliveries []cricinfo.DeliveryEvent, playerFilter 
 	return filtered
 }
 
-func fetchSiteAPIPitchMapGrid(ctx context.Context, leagueID, matchID, playerFilter string) ([][]int, string, error) {
+type sitePitchMapBundle struct {
+	PlayerName string
+	RHB        [][]int
+	LHB        [][]int
+}
+
+func fetchSiteAPIPitchMapGrid(ctx context.Context, leagueID, matchID, playerFilter string) (sitePitchMapBundle, error) {
 	u := "https://site.api.espn.com/apis/site/v2/sports/cricket/" + url.PathEscape(strings.TrimSpace(leagueID)) + "/summary?event=" + url.QueryEscape(strings.TrimSpace(matchID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, "", err
+		return sitePitchMapBundle{}, err
 	}
 	req.Header.Set("User-Agent", "cricinfo-cli/pitch-map")
 	client := &http.Client{Timeout: 6 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "", err
+		return sitePitchMapBundle{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", fmt.Errorf("site api status %d", resp.StatusCode)
+		return sitePitchMapBundle{}, fmt.Errorf("site api status %d", resp.StatusCode)
 	}
 
 	var payload map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, "", err
+		return sitePitchMapBundle{}, err
 	}
 
 	filter := strings.ToLower(strings.TrimSpace(playerFilter))
@@ -807,14 +813,18 @@ func fetchSiteAPIPitchMapGrid(ctx context.Context, leagueID, matchID, playerFilt
 					lhb := decodePitchMapCountGrid(bowling["pitchMapLhb"])
 					combined := combinePitchMapGrids(rhb, lhb)
 					if countPitchMapGrid(combined) > 0 {
-						return combined, nonEmpty(displayName, fullName, playerID), nil
+						return sitePitchMapBundle{
+							PlayerName: nonEmpty(displayName, fullName, playerID),
+							RHB:        rhb,
+							LHB:        lhb,
+						}, nil
 					}
 				}
 			}
 		}
 	}
 
-	return nil, "", fmt.Errorf("no site-api pitch map for %q", playerFilter)
+	return sitePitchMapBundle{}, fmt.Errorf("no site-api pitch map for %q", playerFilter)
 }
 
 func playerFilterMatches(filter, playerID, displayName, fullName string) bool {
@@ -908,13 +918,39 @@ func countPitchMapGrid(grid [][]int) int {
 	return total
 }
 
-func renderSiteAPIPitchMapGrid(out io.Writer, playerName string, grid [][]int) {
-	if len(grid) == 0 {
+func renderSiteAPIPitchMapGrid(out io.Writer, bundle sitePitchMapBundle) {
+	combined := combinePitchMapGrids(bundle.RHB, bundle.LHB)
+	if len(combined) == 0 {
 		return
 	}
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "Site API Pitch Map Fallback (%s)\n", strings.TrimSpace(playerName))
-	fmt.Fprintln(out, "Legend: .(1-2) o(3-5) O(6-9) #(10+)")
+	fmt.Fprintf(out, "Site API Pitch Map Fallback (%s)\n", strings.TrimSpace(bundle.PlayerName))
+	fmt.Fprintln(out, "Guide:")
+	fmt.Fprintln(out, "  Rows (top->bottom): Short, Back of length, Good, Fuller, Full, Yorker")
+	fmt.Fprintln(out, "  Cols (left->right): Wide Off, Off, Channel, Leg, Wide Leg")
+	fmt.Fprintln(out, "  Density legend: .(1-2) o(3-5) O(6-9) #(10-14) @(15+)")
+	fmt.Fprintln(out)
+	renderSingleLabeledPitchGrid(out, "Combined", combined)
+	if countPitchMapGrid(bundle.RHB) > 0 {
+		fmt.Fprintln(out)
+		renderSingleLabeledPitchGrid(out, "vs RHB", bundle.RHB)
+	}
+	if countPitchMapGrid(bundle.LHB) > 0 {
+		fmt.Fprintln(out)
+		renderSingleLabeledPitchGrid(out, "vs LHB", bundle.LHB)
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Hotspots (top cells):")
+	for _, row := range topPitchMapHotspots(combined, 3) {
+		fmt.Fprintf(out, "  %s\n", row)
+	}
+}
+
+func renderSingleLabeledPitchGrid(out io.Writer, title string, grid [][]int) {
+	if len(grid) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "%s\n", strings.TrimSpace(title))
 	cols := 0
 	for _, row := range grid {
 		if len(row) > cols {
@@ -924,31 +960,98 @@ func renderSiteAPIPitchMapGrid(out io.Writer, playerName string, grid [][]int) {
 	if cols == 0 {
 		return
 	}
+	colLabels := []string{"WO", "OF", "CH", "LG", "WL"}
+	rowLabels := []string{"SHT", "BOL", "GDL", "FUL", "FLR", "YRK"}
+	fmt.Fprint(out, "       ")
+	for c := 0; c < cols; c++ {
+		label := "C" + strconv.Itoa(c+1)
+		if c < len(colLabels) {
+			label = colLabels[c]
+		}
+		fmt.Fprintf(out, "%s ", label)
+	}
+	fmt.Fprintln(out)
 	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("--", cols))
-	for _, row := range grid {
-		fmt.Fprint(out, "   |")
+	for r, row := range grid {
+		label := "R" + strconv.Itoa(r+1)
+		if r < len(rowLabels) {
+			label = rowLabels[r]
+		}
+		fmt.Fprintf(out, " %3s|", label)
 		for c := 0; c < cols; c++ {
 			v := 0
 			if c < len(row) {
 				v = row[c]
 			}
-			ch := "  "
-			switch {
-			case v >= 10:
-				ch = "# "
-			case v >= 6:
-				ch = "O "
-			case v >= 3:
-				ch = "o "
-			case v >= 1:
-				ch = ". "
-			}
-			fmt.Fprint(out, ch)
+			fmt.Fprintf(out, "%c ", pitchDensityGlyph(v))
 		}
 		fmt.Fprintln(out, "|")
 	}
 	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("--", cols))
 	fmt.Fprintf(out, "   balls represented: %d\n", countPitchMapGrid(grid))
+}
+
+func pitchDensityGlyph(v int) rune {
+	switch {
+	case v >= 15:
+		return '@'
+	case v >= 10:
+		return '#'
+	case v >= 6:
+		return 'O'
+	case v >= 3:
+		return 'o'
+	case v >= 1:
+		return '.'
+	default:
+		return ' '
+	}
+}
+
+func topPitchMapHotspots(grid [][]int, limit int) []string {
+	type cell struct {
+		r int
+		c int
+		v int
+	}
+	cells := make([]cell, 0)
+	for r, row := range grid {
+		for c, v := range row {
+			if v > 0 {
+				cells = append(cells, cell{r: r, c: c, v: v})
+			}
+		}
+	}
+	sort.Slice(cells, func(i, j int) bool {
+		if cells[i].v != cells[j].v {
+			return cells[i].v > cells[j].v
+		}
+		if cells[i].r != cells[j].r {
+			return cells[i].r < cells[j].r
+		}
+		return cells[i].c < cells[j].c
+	})
+	if len(cells) > limit {
+		cells = cells[:limit]
+	}
+	rowLabels := []string{"Short", "BackLen", "GoodLen", "Full", "Fuller", "Yorker"}
+	colLabels := []string{"WideOff", "Off", "Channel", "Leg", "WideLeg"}
+	out := make([]string, 0, len(cells))
+	for _, c := range cells {
+		row := "Row" + strconv.Itoa(c.r+1)
+		col := "Col" + strconv.Itoa(c.c+1)
+		if c.r < len(rowLabels) {
+			row = rowLabels[c.r]
+		}
+		if c.c < len(colLabels) {
+			col = colLabels[c.c]
+		}
+		out = append(out, fmt.Sprintf("%s / %s -> %d balls", row, col, c.v))
+	}
+	if len(out) == 0 {
+		out = append(out, "No hotspot cells available")
+	}
+	return out
 }
 
 func mapValue(raw any) map[string]any {
