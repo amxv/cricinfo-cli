@@ -1672,10 +1672,25 @@ func (s *MatchService) deliveryEventsForMatchRefs(ctx context.Context, primaryRe
 
 	merged = dedupeDeliveryEvents(merged)
 	sortDeliveryEvents(merged)
+	if len(merged) > 0 && !deliverySetHasPitchMapData(merged) {
+		warnings = append(warnings, "pitch-map unavailable: source API returned null hawkeyeId/xCoordinate/yCoordinate for all delivery events")
+	}
 	if len(merged) == 0 && primaryErr != nil {
 		return nil, compactWarnings(warnings), primaryErr
 	}
 	return merged, compactWarnings(warnings), nil
+}
+
+func deliverySetHasPitchMapData(deliveries []DeliveryEvent) bool {
+	for _, delivery := range deliveries {
+		if strings.TrimSpace(delivery.HawkeyeID) != "" {
+			return true
+		}
+		if delivery.XCoordinate != nil && delivery.YCoordinate != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *MatchService) loadDeliveryEventsFromRoute(ctx context.Context, ref string) ([]DeliveryEvent, []string, error) {

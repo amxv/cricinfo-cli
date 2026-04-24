@@ -2,8 +2,16 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"math"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/amxv/cricinfo-cli/internal/cricinfo"
 	"github.com/spf13/cobra"
@@ -35,6 +43,7 @@ type matchRuntimeOptions struct {
 	team     string
 	batter   string
 	bowler   string
+	player   string
 	innings  int
 	period   int
 }
@@ -242,6 +251,28 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 			})
 		},
 	}
+
+	pitchMapCmd := &cobra.Command{
+		Use:   "pitch-map <match>",
+		Short: "Render a visual ASCII pitch map from delivery coordinates",
+		Long: strings.Join([]string{
+			"Resolve a match and render a text pitch map using delivery x/y coordinates.",
+			"Use --player to focus on one player by ID, ref fragment, or name snippet from shortText.",
+			"",
+			"Notes:",
+			"  - Balls without coordinates are counted as unplottable.",
+			"  - If all balls are missing coordinates, the map is shown empty with diagnostics.",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !strings.EqualFold(global.format, "text") {
+				return fmt.Errorf("matches pitch-map currently supports --format text only")
+			}
+			query := strings.TrimSpace(strings.Join(args, " "))
+			return runMatchPitchMapCommand(cmd, global, opts, query)
+		},
+	}
+	pitchMapCmd.Flags().StringVar(&opts.player, "player", "", "Optional: player id/ref/name filter")
 
 	situationCmd := &cobra.Command{
 		Use:   "situation <match>",
@@ -489,6 +520,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		scorecardCmd,
 		detailsCmd,
 		playsCmd,
+		pitchMapCmd,
 		situationCmd,
 		liveViewCmd,
 		duelCmd,
@@ -524,4 +556,509 @@ func runMatchCommand(
 		Verbose:   global.verbose,
 		AllFields: global.allFields,
 	})
+}
+
+func runMatchPitchMapCommand(cmd *cobra.Command, global *globalOptions, opts *matchRuntimeOptions, query string) error {
+	service, err := newMatchService()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = service.Close()
+	}()
+
+	result, err := service.Details(cmd.Context(), query, cricinfo.MatchLookupOptions{LeagueID: opts.leagueID})
+	if err != nil {
+		return err
+	}
+
+	if result.Status == cricinfo.ResultStatusError {
+		return cricinfo.Render(cmd.OutOrStdout(), result, cricinfo.RenderOptions{
+			Format:    global.format,
+			Verbose:   global.verbose,
+			AllFields: global.allFields,
+		})
+	}
+
+	deliveries := make([]cricinfo.DeliveryEvent, 0, len(result.Items))
+	for _, item := range result.Items {
+		if delivery, ok := item.(cricinfo.DeliveryEvent); ok {
+			deliveries = append(deliveries, delivery)
+			continue
+		}
+		if delivery, ok := item.(*cricinfo.DeliveryEvent); ok && delivery != nil {
+			deliveries = append(deliveries, *delivery)
+		}
+	}
+
+	filtered := filterDeliveriesByPlayer(deliveries, opts.player)
+	plotted := 0
+	for _, d := range filtered {
+		if d.XCoordinate != nil && d.YCoordinate != nil {
+			plotted++
+		}
+	}
+
+	renderPitchMapText(
+		cmd.OutOrStdout(),
+		query,
+		opts.player,
+		filtered,
+		result.Warnings,
+	)
+
+	if plotted == 0 && strings.TrimSpace(opts.player) != "" {
+		leagueID := strings.TrimSpace(opts.leagueID)
+		if leagueID == "" && len(deliveries) > 0 {
+			leagueID = strings.TrimSpace(deliveries[0].LeagueID)
+		}
+		matchID := strings.TrimSpace(query)
+		if matchID != "" && leagueID != "" {
+			if grid, matchedName, err := fetchSiteAPIPitchMapGrid(cmd.Context(), leagueID, matchID, opts.player); err == nil && len(grid) > 0 {
+				renderSiteAPIPitchMapGrid(cmd.OutOrStdout(), matchedName, grid)
+			}
+		}
+	}
+	return nil
+}
+
+func renderPitchMapText(out io.Writer, matchQuery, playerFilter string, filtered []cricinfo.DeliveryEvent, warnings []string) {
+	type point struct {
+		x       float64
+		y       float64
+		wicket  bool
+		labelID string
+	}
+
+	points := make([]point, 0, len(filtered))
+	unplottable := 0
+	for _, d := range filtered {
+		if d.XCoordinate == nil || d.YCoordinate == nil {
+			unplottable++
+			continue
+		}
+		isWicket := false
+		if raw, ok := d.Dismissal["dismissal"]; ok {
+			if dismiss, ok := raw.(bool); ok && dismiss {
+				isWicket = true
+			}
+		}
+		points = append(points, point{
+			x:       *d.XCoordinate,
+			y:       *d.YCoordinate,
+			wicket:  isWicket,
+			labelID: d.ID,
+		})
+	}
+
+	const rows = 13
+	const cols = 29
+	grid := make([][]rune, rows)
+	for r := 0; r < rows; r++ {
+		grid[r] = make([]rune, cols)
+		for c := 0; c < cols; c++ {
+			grid[r][c] = ' '
+		}
+	}
+
+	minX, maxX := 0.0, 1.0
+	minY, maxY := 0.0, 1.0
+	if len(points) > 0 {
+		minX, maxX = points[0].x, points[0].x
+		minY, maxY = points[0].y, points[0].y
+		for _, p := range points[1:] {
+			if p.x < minX {
+				minX = p.x
+			}
+			if p.x > maxX {
+				maxX = p.x
+			}
+			if p.y < minY {
+				minY = p.y
+			}
+			if p.y > maxY {
+				maxY = p.y
+			}
+		}
+		if minX == maxX {
+			minX -= 0.5
+			maxX += 0.5
+		}
+		if minY == maxY {
+			minY -= 0.5
+			maxY += 0.5
+		}
+	}
+
+	for _, p := range points {
+		cf := (p.x - minX) / (maxX - minX)
+		rf := (p.y - minY) / (maxY - minY)
+		c := int(math.Round(cf * float64(cols-1)))
+		r := int(math.Round(rf * float64(rows-1)))
+		if c < 0 {
+			c = 0
+		}
+		if c >= cols {
+			c = cols - 1
+		}
+		if r < 0 {
+			r = 0
+		}
+		if r >= rows {
+			r = rows - 1
+		}
+		mark := 'o'
+		if p.wicket {
+			mark = 'X'
+		}
+		if grid[r][c] != ' ' && grid[r][c] != mark {
+			mark = '*'
+		}
+		grid[r][c] = mark
+	}
+
+	fmt.Fprintf(out, "Pitch Map\n")
+	fmt.Fprintf(out, "Match: %s\n", strings.TrimSpace(matchQuery))
+	if strings.TrimSpace(playerFilter) != "" {
+		fmt.Fprintf(out, "Player filter: %s\n", strings.TrimSpace(playerFilter))
+	}
+	fmt.Fprintf(out, "Balls matched: %d\n", len(filtered))
+	fmt.Fprintf(out, "Plotted balls: %d\n", len(points))
+	fmt.Fprintf(out, "Unplottable balls: %d\n", unplottable)
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Legend: o ball, X wicket, * overlap")
+	fmt.Fprintln(out, "      OFF SIDE")
+	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-", cols))
+	for _, row := range grid {
+		fmt.Fprintf(out, "   |%s|\n", string(row))
+	}
+	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-", cols))
+	fmt.Fprintln(out, "      LEG SIDE")
+
+	if len(warnings) > 0 {
+		fmt.Fprintln(out)
+		sort.Strings(warnings)
+		for _, warning := range warnings {
+			fmt.Fprintf(out, "warning: %s\n", warning)
+		}
+	}
+}
+
+func filterDeliveriesByPlayer(deliveries []cricinfo.DeliveryEvent, playerFilter string) []cricinfo.DeliveryEvent {
+	filter := strings.ToLower(strings.TrimSpace(playerFilter))
+	if filter == "" {
+		return append([]cricinfo.DeliveryEvent(nil), deliveries...)
+	}
+	filtered := make([]cricinfo.DeliveryEvent, 0, len(deliveries))
+	for _, d := range deliveries {
+		if deliveryMatchesPlayerFilter(d, filter) {
+			filtered = append(filtered, d)
+		}
+	}
+	return filtered
+}
+
+func fetchSiteAPIPitchMapGrid(ctx context.Context, leagueID, matchID, playerFilter string) ([][]int, string, error) {
+	u := "https://site.api.espn.com/apis/site/v2/sports/cricket/" + url.PathEscape(strings.TrimSpace(leagueID)) + "/summary?event=" + url.QueryEscape(strings.TrimSpace(matchID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("User-Agent", "cricinfo-cli/pitch-map")
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("site api status %d", resp.StatusCode)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, "", err
+	}
+
+	filter := strings.ToLower(strings.TrimSpace(playerFilter))
+	rosters := mapSliceValue(payload, "rosters")
+	for _, rosterRaw := range rosters {
+		roster := mapValue(rosterRaw)
+		players := mapSliceValue(roster, "roster")
+		for _, playerRaw := range players {
+			player := mapValue(playerRaw)
+			athlete := mapValue(player["athlete"])
+			playerID := strings.TrimSpace(valueString(athlete, "id"))
+			displayName := strings.TrimSpace(valueString(athlete, "displayName"))
+			fullName := strings.TrimSpace(valueString(athlete, "fullName"))
+			if !playerFilterMatches(filter, playerID, displayName, fullName) {
+				continue
+			}
+
+			linescores := mapSliceValue(player, "linescores")
+			for _, lsRaw := range linescores {
+				ls := mapValue(lsRaw)
+				innings := mapSliceValue(ls, "linescores")
+				for _, innRaw := range innings {
+					inn := mapValue(innRaw)
+					stats := mapValue(inn["statistics"])
+					bowling := mapValue(stats["bowling"])
+					rhb := decodePitchMapCountGrid(bowling["pitchMapRhb"])
+					lhb := decodePitchMapCountGrid(bowling["pitchMapLhb"])
+					combined := combinePitchMapGrids(rhb, lhb)
+					if countPitchMapGrid(combined) > 0 {
+						return combined, nonEmpty(displayName, fullName, playerID), nil
+					}
+				}
+			}
+		}
+	}
+
+	return nil, "", fmt.Errorf("no site-api pitch map for %q", playerFilter)
+}
+
+func playerFilterMatches(filter, playerID, displayName, fullName string) bool {
+	if filter == "" {
+		return true
+	}
+	candidates := []string{
+		strings.ToLower(strings.TrimSpace(playerID)),
+		strings.ToLower(strings.TrimSpace(displayName)),
+		strings.ToLower(strings.TrimSpace(fullName)),
+	}
+	for _, c := range candidates {
+		if c == "" {
+			continue
+		}
+		if c == filter || strings.Contains(c, filter) {
+			return true
+		}
+	}
+	if _, err := strconv.Atoi(filter); err == nil {
+		return strings.TrimSpace(playerID) == filter
+	}
+	return false
+}
+
+func decodePitchMapCountGrid(raw any) [][]int {
+	rows, ok := raw.([]any)
+	if !ok || len(rows) == 0 {
+		return nil
+	}
+	grid := make([][]int, 0, len(rows))
+	for _, rowRaw := range rows {
+		colsRaw, ok := rowRaw.([]any)
+		if !ok || len(colsRaw) == 0 {
+			continue
+		}
+		row := make([]int, 0, len(colsRaw))
+		for _, cellRaw := range colsRaw {
+			triple, ok := cellRaw.([]any)
+			if !ok || len(triple) == 0 {
+				row = append(row, 0)
+				continue
+			}
+			row = append(row, intValue(triple[0]))
+		}
+		grid = append(grid, row)
+	}
+	return grid
+}
+
+func combinePitchMapGrids(a, b [][]int) [][]int {
+	rows := len(a)
+	if len(b) > rows {
+		rows = len(b)
+	}
+	if rows == 0 {
+		return nil
+	}
+	out := make([][]int, rows)
+	for r := 0; r < rows; r++ {
+		cols := 0
+		if r < len(a) && len(a[r]) > cols {
+			cols = len(a[r])
+		}
+		if r < len(b) && len(b[r]) > cols {
+			cols = len(b[r])
+		}
+		if cols == 0 {
+			continue
+		}
+		out[r] = make([]int, cols)
+		for c := 0; c < cols; c++ {
+			if r < len(a) && c < len(a[r]) {
+				out[r][c] += a[r][c]
+			}
+			if r < len(b) && c < len(b[r]) {
+				out[r][c] += b[r][c]
+			}
+		}
+	}
+	return out
+}
+
+func countPitchMapGrid(grid [][]int) int {
+	total := 0
+	for _, row := range grid {
+		for _, v := range row {
+			total += v
+		}
+	}
+	return total
+}
+
+func renderSiteAPIPitchMapGrid(out io.Writer, playerName string, grid [][]int) {
+	if len(grid) == 0 {
+		return
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Site API Pitch Map Fallback (%s)\n", strings.TrimSpace(playerName))
+	fmt.Fprintln(out, "Legend: .(1-2) o(3-5) O(6-9) #(10+)")
+	cols := 0
+	for _, row := range grid {
+		if len(row) > cols {
+			cols = len(row)
+		}
+	}
+	if cols == 0 {
+		return
+	}
+	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("--", cols))
+	for _, row := range grid {
+		fmt.Fprint(out, "   |")
+		for c := 0; c < cols; c++ {
+			v := 0
+			if c < len(row) {
+				v = row[c]
+			}
+			ch := "  "
+			switch {
+			case v >= 10:
+				ch = "# "
+			case v >= 6:
+				ch = "O "
+			case v >= 3:
+				ch = "o "
+			case v >= 1:
+				ch = ". "
+			}
+			fmt.Fprint(out, ch)
+		}
+		fmt.Fprintln(out, "|")
+	}
+	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("--", cols))
+	fmt.Fprintf(out, "   balls represented: %d\n", countPitchMapGrid(grid))
+}
+
+func mapValue(raw any) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	if mapped, ok := raw.(map[string]any); ok {
+		return mapped
+	}
+	return nil
+}
+
+func mapSliceValue(m map[string]any, key string) []any {
+	if m == nil {
+		return nil
+	}
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	return items
+}
+
+func valueString(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case fmt.Stringer:
+		return strings.TrimSpace(v.String())
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", raw))
+	}
+}
+
+func intValue(raw any) int {
+	switch v := raw.(type) {
+	case int:
+		return v
+	case int8:
+		return int(v)
+	case int16:
+		return int(v)
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case uint:
+		return int(v)
+	case uint8:
+		return int(v)
+	case uint16:
+		return int(v)
+	case uint32:
+		return int(v)
+	case uint64:
+		return int(v)
+	case float32:
+		return int(v)
+	case float64:
+		return int(v)
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+func nonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func deliveryMatchesPlayerFilter(d cricinfo.DeliveryEvent, filter string) bool {
+	if filter == "" {
+		return true
+	}
+	candidates := []string{
+		d.BatsmanPlayerID,
+		d.BowlerPlayerID,
+		d.OtherBatsmanID,
+		d.OtherBowlerID,
+		d.FielderPlayerID,
+		d.BatsmanRef,
+		d.BowlerRef,
+		d.OtherBatsmanRef,
+		d.OtherBowlerRef,
+		d.ShortText,
+		d.Text,
+	}
+	for _, candidate := range candidates {
+		if strings.Contains(strings.ToLower(candidate), filter) {
+			return true
+		}
+	}
+	return false
 }

@@ -344,6 +344,22 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 		t.Fatalf("expected plays text output to include normalized short text, got %q", playsOut.String())
 	}
 
+	var pitchMapOut bytes.Buffer
+	var pitchMapErr bytes.Buffer
+	if err := Run([]string{"matches", "pitch-map", "1529474", "--player", "1361257", "--format", "text"}, &pitchMapOut, &pitchMapErr); err != nil {
+		t.Fatalf("Run matches pitch-map --format text error: %v", err)
+	}
+	pitchMapText := pitchMapOut.String()
+	if !strings.Contains(pitchMapText, "Pitch Map") {
+		t.Fatalf("expected pitch map header in output, got %q", pitchMapText)
+	}
+	if !strings.Contains(pitchMapText, "Player filter: 1361257") {
+		t.Fatalf("expected player filter in pitch map output, got %q", pitchMapText)
+	}
+	if !strings.Contains(pitchMapText, "Plotted balls: 1") {
+		t.Fatalf("expected plotted ball count in pitch map output, got %q", pitchMapText)
+	}
+
 	var lineupOut bytes.Buffer
 	var lineupErr bytes.Buffer
 	if err := Run([]string{"matches", "lineup", "1529474", "--format", "text"}, &lineupOut, &lineupErr); err != nil {
