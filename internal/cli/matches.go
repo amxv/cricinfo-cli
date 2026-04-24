@@ -46,6 +46,8 @@ type matchRuntimeOptions struct {
 	player   string
 	innings  int
 	period   int
+	scope    string
+	top      int
 }
 
 var newMatchService = func() (matchCommandService, error) {
@@ -322,13 +324,17 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 
 	duelCmd := &cobra.Command{
 		Use:   "duel <match>",
-		Short: "Show batter-vs-bowler matchup summary in one match",
+		Aliases: []string{"matchup"},
+		Short:   "Show batter-vs-bowler matchup summary in one match",
 		Long: strings.Join([]string{
 			"Resolve a match and summarize the head-to-head duel between one batter and one bowler.",
 			"",
 			"Required flags:",
 			"  --batter <player>",
 			"  --bowler <player>",
+			"",
+			"Example:",
+			"  cricinfo matches matchup <match> --batter \"Tim David\" --bowler \"Mohammed Siraj\"",
 			"",
 			"Next steps:",
 			"  cricinfo matches plays <match>",
@@ -354,6 +360,44 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 	}
 	duelCmd.Flags().StringVar(&opts.batter, "batter", "", "Required: batter ID/ref/alias")
 	duelCmd.Flags().StringVar(&opts.bowler, "bowler", "", "Required: bowler ID/ref/alias")
+
+	matchupHistoryCmd := &cobra.Command{
+		Use:   "matchup-history",
+		Short: "Show historical batter-vs-bowler matchup summary",
+		Long: strings.Join([]string{
+			"Aggregate a batter-vs-bowler head-to-head across match or season scope.",
+			"",
+			"Required flags:",
+			"  --batter <player>",
+			"  --bowler <player>",
+			"  --scope match:<match> | season:<season>",
+			"",
+			"Examples:",
+			"  cricinfo matches matchup-history --batter \"Krunal Pandya\" --bowler \"Jason Holder\" --scope match:1529277 --league 8048",
+			"  cricinfo matches matchup-history --batter \"Tim David\" --bowler \"Mohammed Siraj\" --scope season:2026 --league 8048",
+		}, "\n"),
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !strings.EqualFold(global.format, "text") {
+				return fmt.Errorf("matches matchup-history currently supports --format text only")
+			}
+			if strings.TrimSpace(opts.batter) == "" {
+				return fmt.Errorf("--batter is required")
+			}
+			if strings.TrimSpace(opts.bowler) == "" {
+				return fmt.Errorf("--bowler is required")
+			}
+			if strings.TrimSpace(opts.scope) == "" {
+				return fmt.Errorf("--scope is required (match:<match> or season:<season>)")
+			}
+			return runMatchupHistoryCommand(cmd, opts)
+		},
+	}
+	matchupHistoryCmd.Flags().StringVar(&opts.scope, "scope", "", "Required: match:<match> or season:<season>")
+	matchupHistoryCmd.Flags().StringVar(&opts.batter, "batter", "", "Required: batter ID/ref/alias")
+	matchupHistoryCmd.Flags().StringVar(&opts.bowler, "bowler", "", "Required: bowler ID/ref/alias")
+	matchupHistoryCmd.Flags().IntVar(&opts.limit, "match-limit", 0, "Optional cap on scoped matches before aggregation")
+	matchupHistoryCmd.Flags().IntVar(&opts.top, "top", 8, "Maximum per-match matchup cards to display")
 
 	phasesCmd := &cobra.Command{
 		Use:   "phases <match>",
@@ -524,6 +568,7 @@ func newMatchesCommand(global *globalOptions) *cobra.Command {
 		situationCmd,
 		liveViewCmd,
 		duelCmd,
+		matchupHistoryCmd,
 		phasesCmd,
 		inningsCmd,
 		partnershipsCmd,

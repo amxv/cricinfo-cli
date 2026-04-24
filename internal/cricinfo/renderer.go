@@ -1208,6 +1208,7 @@ func formatMatchSituation(entity map[string]any) []string {
 
 func formatMatchDuel(entity map[string]any) []string {
 	lines := make([]string, 0, 48)
+	lines = append(lines, "Matchup Card")
 	if matchID := valueString(entity, "matchId"); matchID != "" {
 		lines = append(lines, "Match: "+matchID)
 	}
@@ -1217,7 +1218,17 @@ func formatMatchDuel(entity map[string]any) []string {
 	if score := valueString(entity, "score"); score != "" {
 		lines = append(lines, "Score: "+score)
 	}
-	lines = append(lines, "Duel: "+firstNonEmpty(valueString(entity, "batterName"), valueString(entity, "batterId"))+" vs "+firstNonEmpty(valueString(entity, "bowlerName"), valueString(entity, "bowlerId")))
+	batter := firstNonEmpty(valueString(entity, "batterName"), valueString(entity, "batterId"))
+	bowler := firstNonEmpty(valueString(entity, "bowlerName"), valueString(entity, "bowlerId"))
+	lines = append(lines, "Duel: "+batter+" vs "+bowler)
+
+	balls := parseRendererInt(valueString(entity, "balls"))
+	runs := parseRendererInt(valueString(entity, "runs"))
+	dots := parseRendererInt(valueString(entity, "dots"))
+	fours := parseRendererInt(valueString(entity, "fours"))
+	sixes := parseRendererInt(valueString(entity, "sixes"))
+	wickets := parseRendererInt(valueString(entity, "wickets"))
+
 	summary := joinParts(
 		fmt.Sprintf("%s off %s", defaultNumeric(valueString(entity, "runs")), defaultNumeric(valueString(entity, "balls"))),
 		"SR "+defaultNumeric(valueString(entity, "strikeRate")),
@@ -1229,17 +1240,109 @@ func formatMatchDuel(entity map[string]any) []string {
 	if strings.TrimSpace(summary) != "" {
 		lines = append(lines, "Summary: "+summary)
 	}
+	if balls > 0 {
+		dotPct := (float64(dots) * 100) / float64(balls)
+		boundaryRuns := (fours * 4) + (sixes * 6)
+		boundaryPct := 0.0
+		if runs > 0 {
+			boundaryPct = (float64(boundaryRuns) * 100) / float64(runs)
+		}
+		lines = append(lines, fmt.Sprintf("Pressure: %s %.1f%% dots", renderDuelPressureBar(dotPct), dotPct))
+		lines = append(lines, fmt.Sprintf("Boundary Share: %d/%d runs (%.1f%%) | Wickets: %d", boundaryRuns, runs, boundaryPct, wickets))
+	}
 	if snapshot := valueString(entity, "snapshotAt"); snapshot != "" {
 		lines = append(lines, "Snapshot: "+snapshot)
 	}
-	balls := sliceValue(entity, "recentBalls")
-	if len(balls) > 0 {
+	recentBalls := sliceValue(entity, "recentBalls")
+	if len(recentBalls) > 0 {
+		tokens := make([]string, 0, len(recentBalls))
+		for _, raw := range recentBalls {
+			tokens = append(tokens, duelBallToken(raw))
+		}
+		lines = append(lines, "Recent Sequence: "+strings.Join(tokens, " "))
 		lines = append(lines, "Recent Duel Balls")
-		for i, raw := range balls {
+		for i, raw := range recentBalls {
 			lines = append(lines, fmt.Sprintf("  %d. %s", i+1, summarizeDeliveryListItem(raw, EntityDeliveryEvent)))
 		}
 	}
 	return lines
+}
+
+func parseRendererInt(raw string) int {
+	v, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func renderDuelPressureBar(dotPct float64) string {
+	if dotPct < 0 {
+		dotPct = 0
+	}
+	if dotPct > 100 {
+		dotPct = 100
+	}
+	const width = 20
+	filled := int((dotPct / 100.0) * float64(width))
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > width {
+		filled = width
+	}
+	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + "]"
+}
+
+func duelBallToken(raw any) string {
+	ball, ok := raw.(map[string]any)
+	if !ok {
+		return "?"
+	}
+	if dismissRaw, ok := ball["dismissal"]; ok {
+		if dismissMap, ok := dismissRaw.(map[string]any); ok {
+			if dismissed, ok := dismissMap["dismissal"].(bool); ok && dismissed {
+				return "W"
+			}
+		}
+	}
+
+	short := strings.ToUpper(strings.TrimSpace(valueString(ball, "shortText")))
+	switch {
+	case strings.Contains(short, "SIX"):
+		return "6"
+	case strings.Contains(short, "FOUR"):
+		return "4"
+	case strings.Contains(short, "WIDE"):
+		return "Wd"
+	case strings.Contains(short, "NO BALL"), strings.Contains(short, "NOBALL"):
+		return "Nb"
+	}
+
+	if scoreRaw, ok := ball["scoreValue"]; ok {
+		switch v := scoreRaw.(type) {
+		case int:
+			if v == 0 {
+				return "."
+			}
+			return strconv.Itoa(v)
+		case float64:
+			n := int(v)
+			if n == 0 {
+				return "."
+			}
+			return strconv.Itoa(n)
+		case string:
+			n, err := strconv.Atoi(strings.TrimSpace(v))
+			if err == nil {
+				if n == 0 {
+					return "."
+				}
+				return strconv.Itoa(n)
+			}
+		}
+	}
+	return "."
 }
 
 func oversLabelFromFields(overs string, balls string) string {

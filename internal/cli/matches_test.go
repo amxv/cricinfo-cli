@@ -401,6 +401,28 @@ func TestMatchesCommandsRenderTextAndJSON(t *testing.T) {
 	if !strings.Contains(duelText, "Duel:") || !strings.Contains(duelText, "Numan Shah") {
 		t.Fatalf("expected duel output to include matchup summary, got %q", duelText)
 	}
+	if !strings.Contains(duelText, "Matchup Card") || !strings.Contains(duelText, "Recent Sequence:") {
+		t.Fatalf("expected enhanced matchup card fields in duel output, got %q", duelText)
+	}
+
+	var matchupOut bytes.Buffer
+	var matchupErr bytes.Buffer
+	if err := Run([]string{"matches", "matchup", "1529474", "--batter", "Numan Shah", "--bowler", "Hayatullah Noori", "--format", "text"}, &matchupOut, &matchupErr); err != nil {
+		t.Fatalf("Run matches matchup alias --format text error: %v", err)
+	}
+	if !strings.Contains(matchupOut.String(), "Duel:") {
+		t.Fatalf("expected matchup alias output to include duel section, got %q", matchupOut.String())
+	}
+
+	var matchupHistoryOut bytes.Buffer
+	var matchupHistoryErr bytes.Buffer
+	if err := Run([]string{"matches", "matchup-history", "--batter", "Numan Shah", "--bowler", "Hayatullah Noori", "--scope", "match:1529474", "--format", "text"}, &matchupHistoryOut, &matchupHistoryErr); err != nil {
+		t.Fatalf("Run matches matchup-history --format text error: %v", err)
+	}
+	matchupHistoryText := matchupHistoryOut.String()
+	if !strings.Contains(matchupHistoryText, "Matchup History") || !strings.Contains(matchupHistoryText, "Aggregate") {
+		t.Fatalf("expected matchup-history output to include aggregate card, got %q", matchupHistoryText)
+	}
 
 	var inningsOut bytes.Buffer
 	var inningsErr bytes.Buffer
