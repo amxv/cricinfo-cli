@@ -614,10 +614,20 @@ func runMatchPitchMapCommand(cmd *cobra.Command, global *globalOptions, opts *ma
 		}
 		matchID := strings.TrimSpace(query)
 		if matchID != "" && leagueID != "" {
+			renderedFallback := false
+			// Prefer batting wagon when available for batter-centric lookups,
+			// but still show bowling pitch-map if it also exists.
+			if batting, berr := fetchSiteAPIBattingWagonMap(cmd.Context(), leagueID, matchID, opts.player); berr == nil && len(batting.ZoneRuns) > 0 {
+				renderSiteAPIBattingWagonMap(cmd.OutOrStdout(), batting)
+				renderedFallback = true
+			}
 			if bundle, err := fetchSiteAPIPitchMapGrid(cmd.Context(), leagueID, matchID, opts.player); err == nil && (len(bundle.RHB) > 0 || len(bundle.LHB) > 0) {
 				renderSiteAPIPitchMapGrid(cmd.OutOrStdout(), bundle)
-			} else if batting, berr := fetchSiteAPIBattingWagonMap(cmd.Context(), leagueID, matchID, opts.player); berr == nil && len(batting.ZoneRuns) > 0 {
-				renderSiteAPIBattingWagonMap(cmd.OutOrStdout(), batting)
+				renderedFallback = true
+			}
+			if !renderedFallback {
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), "No provider fallback map available for this player in this match.")
 			}
 		}
 	}
