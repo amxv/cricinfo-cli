@@ -248,6 +248,7 @@ func newStandingsCommand(global *globalOptions) *cobra.Command {
 			"Next steps:",
 			"  cricinfo standings show <league>",
 			"  cricinfo leagues standings <league>",
+			"  cricinfo standings orange-cap",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -267,7 +268,25 @@ func newStandingsCommand(global *globalOptions) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(showCmd)
+	orangeCapCmd := &cobra.Command{
+		Use:   "orange-cap",
+		Short: "Show current IPL Orange Cap leaderboard",
+		Long: strings.Join([]string{
+			"Fetch and render the current IPL Orange Cap leaderboard in a clean table.",
+			"",
+			"Example:",
+			"  cricinfo standings orange-cap",
+		}, "\n"),
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !strings.EqualFold(global.format, "text") {
+				return fmt.Errorf("standings orange-cap currently supports --format text only")
+			}
+			return runOrangeCapCommand(cmd)
+		},
+	}
+
+	cmd.AddCommand(showCmd, orangeCapCmd)
 	return cmd
 }
 
