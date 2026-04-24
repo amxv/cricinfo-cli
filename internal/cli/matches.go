@@ -955,6 +955,16 @@ func renderSiteAPIPitchMapGrid(out io.Writer, bundle sitePitchMapBundle) {
 	fmt.Fprintln(out, "  Cols (left->right): Wide Off, Off, Channel, Leg, Wide Leg")
 	fmt.Fprintln(out, "  Cell format: <balls><band>, where band is N/L/M/H/V/P")
 	fmt.Fprintln(out, "  Band by balls: N(0), L(1-2), M(3-5), H(6-9), V(10-14), P(15+)")
+	total := countPitchMapGrid(combined)
+	rhbTotal := countPitchMapGrid(bundle.RHB)
+	lhbTotal := countPitchMapGrid(bundle.LHB)
+	rhbPct := 0.0
+	lhbPct := 0.0
+	if total > 0 {
+		rhbPct = float64(rhbTotal) * 100 / float64(total)
+		lhbPct = float64(lhbTotal) * 100 / float64(total)
+	}
+	fmt.Fprintf(out, "  Split: total=%d, vs RHB=%d (%.1f%%), vs LHB=%d (%.1f%%)\n", total, rhbTotal, rhbPct, lhbTotal, lhbPct)
 	fmt.Fprintln(out)
 	renderSingleLabeledPitchGrid(out, "Combined", combined)
 	if countPitchMapGrid(bundle.RHB) > 0 {
@@ -1009,12 +1019,19 @@ func renderSingleLabeledPitchGrid(out io.Writer, title string, grid [][]int) {
 			if c < len(row) {
 				v = row[c]
 			}
-			fmt.Fprintf(out, "%02d%-2s ", v, pitchBandCode(v))
+			fmt.Fprintf(out, "%4s ", pitchCellLabel(v))
 		}
 		fmt.Fprintln(out, "|")
 	}
 	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-----", cols))
 	fmt.Fprintf(out, "   balls represented: %d\n", countPitchMapGrid(grid))
+}
+
+func pitchCellLabel(v int) string {
+	if v <= 0 {
+		return "--"
+	}
+	return fmt.Sprintf("%02d%s", v, pitchBandCode(v))
 }
 
 func pitchBandCode(v int) string {
@@ -1226,6 +1243,10 @@ func renderSiteAPIBattingWagonMap(out io.Writer, bundle siteBattingMapBundle) {
 	fmt.Fprintln(out, "            '---------------'")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "Totals: %d runs from %d scoring shots\n", bundle.TotalRuns, bundle.TotalShots)
+	fmt.Fprintln(out, "Scoring Hotspots:")
+	for _, row := range topBattingZones(bundle, 3) {
+		fmt.Fprintf(out, "  %s\n", row)
+	}
 	fmt.Fprintln(out, "Zone Breakdown:")
 	for i := 0; i < len(bundle.ZoneRuns); i++ {
 		shots := 0
@@ -1242,6 +1263,49 @@ func renderSiteAPIBattingWagonMap(out io.Writer, bundle siteBattingMapBundle) {
 		}
 		fmt.Fprintf(out, "  Z%d -> %d runs (%.1f%%), %d shots (%.1f%%), intensity=%s\n", i+1, bundle.ZoneRuns[i], runPct, shots, shotPct, battingBandLabel(bundle.ZoneRuns[i]))
 	}
+}
+
+func topBattingZones(bundle siteBattingMapBundle, limit int) []string {
+	type zone struct {
+		index int
+		runs  int
+		shots int
+	}
+	zones := make([]zone, 0, len(bundle.ZoneRuns))
+	for i, runs := range bundle.ZoneRuns {
+		shots := 0
+		if i < len(bundle.ZoneShots) {
+			shots = bundle.ZoneShots[i]
+		}
+		if runs <= 0 && shots <= 0 {
+			continue
+		}
+		zones = append(zones, zone{index: i + 1, runs: runs, shots: shots})
+	}
+	sort.Slice(zones, func(i, j int) bool {
+		if zones[i].runs != zones[j].runs {
+			return zones[i].runs > zones[j].runs
+		}
+		if zones[i].shots != zones[j].shots {
+			return zones[i].shots > zones[j].shots
+		}
+		return zones[i].index < zones[j].index
+	})
+	if len(zones) > limit {
+		zones = zones[:limit]
+	}
+	out := make([]string, 0, len(zones))
+	for _, z := range zones {
+		pct := 0.0
+		if bundle.TotalRuns > 0 {
+			pct = float64(z.runs) * 100 / float64(bundle.TotalRuns)
+		}
+		out = append(out, fmt.Sprintf("Z%d -> %d runs (%.1f%%), %d shots", z.index, z.runs, pct, z.shots))
+	}
+	if len(out) == 0 {
+		return []string{"No scoring hotspot zones available"}
+	}
+	return out
 }
 
 func battingBandLabel(v int) string {

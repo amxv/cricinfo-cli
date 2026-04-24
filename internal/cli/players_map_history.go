@@ -114,6 +114,11 @@ func runPlayerMapHistoryCommand(cmd *cobra.Command, opts *playerRuntimeOptions, 
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Matches used for batting map: %d\n", battingMatchesUsed)
 	fmt.Fprintf(cmd.OutOrStdout(), "Matches used for bowling map: %d\n", bowlingMatchesUsed)
+	if len(matchIDs) > 0 {
+		batPct := float64(battingMatchesUsed) * 100 / float64(len(matchIDs))
+		bowlPct := float64(bowlingMatchesUsed) * 100 / float64(len(matchIDs))
+		fmt.Fprintf(cmd.OutOrStdout(), "Coverage: batting %.1f%%, bowling %.1f%% of scoped matches\n", batPct, bowlPct)
+	}
 
 	if mode.Batting {
 		if battingMatchesUsed > 0 && len(battingBundle.ZoneRuns) > 0 {
