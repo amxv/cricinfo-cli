@@ -728,19 +728,24 @@ func renderPitchMapText(out io.Writer, matchQuery, playerFilter string, filtered
 	fmt.Fprintf(out, "Plotted balls: %d\n", len(points))
 	fmt.Fprintf(out, "Unplottable balls: %d\n", unplottable)
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Legend: o ball, X wicket, * overlap")
-	fmt.Fprintln(out, "      OFF SIDE")
-	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-", cols))
-	for _, row := range grid {
-		fmt.Fprintf(out, "   |%s|\n", string(row))
-	}
-	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-", cols))
-	fmt.Fprintln(out, "      LEG SIDE")
-
-	if len(warnings) > 0 {
+	if len(points) == 0 {
+		fmt.Fprintln(out, "Ball-level XY coordinates: unavailable for selected filter.")
+		fmt.Fprintln(out, "Tip: showing provider fallback map below when available.")
+	} else {
 		fmt.Fprintln(out)
-		sort.Strings(warnings)
-		for _, warning := range warnings {
+		fmt.Fprintln(out, "Legend: o ball, X wicket, * overlap")
+		fmt.Fprintln(out, "      OFF SIDE")
+		fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-", cols))
+		for _, row := range grid {
+			fmt.Fprintf(out, "   |%s|\n", string(row))
+		}
+		fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-", cols))
+		fmt.Fprintln(out, "      LEG SIDE")
+	}
+
+	if compactWarnings := summarizePitchMapWarnings(warnings); len(compactWarnings) > 0 {
+		fmt.Fprintln(out)
+		for _, warning := range compactWarnings {
 			fmt.Fprintf(out, "warning: %s\n", warning)
 		}
 	}
@@ -938,7 +943,8 @@ func renderSiteAPIPitchMapGrid(out io.Writer, bundle sitePitchMapBundle) {
 	fmt.Fprintln(out, "Guide:")
 	fmt.Fprintln(out, "  Rows (top->bottom): Short, Back of length, Good, Fuller, Full, Yorker")
 	fmt.Fprintln(out, "  Cols (left->right): Wide Off, Off, Channel, Leg, Wide Leg")
-	fmt.Fprintln(out, "  Density legend: .(1-2) o(3-5) O(6-9) #(10-14) @(15+)")
+	fmt.Fprintln(out, "  Cell format: <balls><band>, where band is N/L/M/H/V/P")
+	fmt.Fprintln(out, "  Band by balls: N(0), L(1-2), M(3-5), H(6-9), V(10-14), P(15+)")
 	fmt.Fprintln(out)
 	renderSingleLabeledPitchGrid(out, "Combined", combined)
 	if countPitchMapGrid(bundle.RHB) > 0 {
@@ -978,10 +984,10 @@ func renderSingleLabeledPitchGrid(out io.Writer, title string, grid [][]int) {
 		if c < len(colLabels) {
 			label = colLabels[c]
 		}
-		fmt.Fprintf(out, "%s ", label)
+		fmt.Fprintf(out, "%4s ", label)
 	}
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("--", cols))
+	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-----", cols))
 	for r, row := range grid {
 		label := "R" + strconv.Itoa(r+1)
 		if r < len(rowLabels) {
@@ -993,28 +999,28 @@ func renderSingleLabeledPitchGrid(out io.Writer, title string, grid [][]int) {
 			if c < len(row) {
 				v = row[c]
 			}
-			fmt.Fprintf(out, "%c ", pitchDensityGlyph(v))
+			fmt.Fprintf(out, "%02d%-2s ", v, pitchBandCode(v))
 		}
 		fmt.Fprintln(out, "|")
 	}
-	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("--", cols))
+	fmt.Fprintf(out, "   +%s+\n", strings.Repeat("-----", cols))
 	fmt.Fprintf(out, "   balls represented: %d\n", countPitchMapGrid(grid))
 }
 
-func pitchDensityGlyph(v int) rune {
+func pitchBandCode(v int) string {
 	switch {
 	case v >= 15:
-		return '@'
+		return "P"
 	case v >= 10:
-		return '#'
+		return "V"
 	case v >= 6:
-		return 'O'
+		return "H"
 	case v >= 3:
-		return 'o'
+		return "M"
 	case v >= 1:
-		return '.'
+		return "L"
 	default:
-		return ' '
+		return "N"
 	}
 }
 
@@ -1062,6 +1068,39 @@ func topPitchMapHotspots(grid [][]int, limit int) []string {
 		out = append(out, "No hotspot cells available")
 	}
 	return out
+}
+
+func summarizePitchMapWarnings(warnings []string) []string {
+	if len(warnings) == 0 {
+		return nil
+	}
+	detail503 := 0
+	other := make([]string, 0, 4)
+	seen := map[string]struct{}{}
+	for _, warning := range warnings {
+		warning = strings.TrimSpace(warning)
+		if warning == "" {
+			continue
+		}
+		if strings.HasPrefix(warning, "detail ") && strings.Contains(warning, "status 503") {
+			detail503++
+			continue
+		}
+		normalized := warning
+		if idx := strings.Index(normalized, ": "); idx > 0 && strings.Contains(normalized, "<!DOCTYPE html>") {
+			normalized = normalized[:idx]
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		other = append(other, normalized)
+	}
+	sort.Strings(other)
+	if detail503 > 0 {
+		other = append(other, fmt.Sprintf("%d detail fetches returned 503 from source API", detail503))
+	}
+	return other
 }
 
 func fetchSiteAPIBattingWagonMap(ctx context.Context, leagueID, matchID, playerFilter string) (siteBattingMapBundle, error) {
@@ -1150,7 +1189,7 @@ func renderSiteAPIBattingWagonMap(out io.Writer, bundle siteBattingMapBundle) {
 	fmt.Fprintf(out, "Site API Batting Wagon Fallback (%s)\n", strings.TrimSpace(bundle.PlayerName))
 	fmt.Fprintln(out, "Guide:")
 	fmt.Fprintln(out, "  Zones use provider order Z1..Z8 (direction labels are provider-defined).")
-	fmt.Fprintln(out, "  Density legend by runs: .(1-4) o(5-9) O(10-14) #(15-24) @(25+)")
+	fmt.Fprintln(out, "  Intensity by runs: NONE(0), LOW(1-4), MED(5-9), HIGH(10-14), VHIGH(15-24), PEAK(25+)")
 	fmt.Fprintln(out)
 
 	get := func(i int) int {
@@ -1161,14 +1200,20 @@ func renderSiteAPIBattingWagonMap(out io.Writer, bundle siteBattingMapBundle) {
 	}
 	g := func(i int) string {
 		v := get(i)
-		return fmt.Sprintf("%s%02d", string(battingDensityGlyph(v)), v)
+		return fmt.Sprintf("%02d %-5s", v, battingBandLabel(v))
 	}
-
-	fmt.Fprintf(out, "              [%s]\n", g(0))
-	fmt.Fprintf(out, "        [%s]         [%s]\n", g(7), g(1))
-	fmt.Fprintf(out, "        [%s]    []    [%s]\n", g(6), g(2))
-	fmt.Fprintf(out, "        [%s]         [%s]\n", g(5), g(3))
-	fmt.Fprintf(out, "              [%s]\n", g(4))
+	// Round/pie-style 8-zone wagon visualization.
+	fmt.Fprintln(out, "Pie View")
+	fmt.Fprintf(out, "                 [Z1 %s]\n", g(0))
+	fmt.Fprintln(out, "            .---------------.")
+	fmt.Fprintf(out, "         .-' [Z8 %s] [Z2 %s] '-.\n", g(7), g(1))
+	fmt.Fprintln(out, "       .'-----------------------'.")
+	fmt.Fprintf(out, "      / [Z7 %s] (BAT) [Z3 %s] \\\n", g(6), g(2))
+	fmt.Fprintln(out, "      |                         |")
+	fmt.Fprintf(out, "      \\ [Z6 %s]       [Z4 %s] /\n", g(5), g(3))
+	fmt.Fprintln(out, "       '.-----------------------.'")
+	fmt.Fprintf(out, "         '-.      [Z5 %s]    .-'\n", g(4))
+	fmt.Fprintln(out, "            '---------------'")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "Totals: %d runs from %d scoring shots\n", bundle.TotalRuns, bundle.TotalShots)
 	fmt.Fprintln(out, "Zone Breakdown:")
@@ -1177,24 +1222,32 @@ func renderSiteAPIBattingWagonMap(out io.Writer, bundle siteBattingMapBundle) {
 		if i < len(bundle.ZoneShots) {
 			shots = bundle.ZoneShots[i]
 		}
-		fmt.Fprintf(out, "  Z%d -> %d runs, %d shots\n", i+1, bundle.ZoneRuns[i], shots)
+		runPct := 0.0
+		if bundle.TotalRuns > 0 {
+			runPct = float64(bundle.ZoneRuns[i]) * 100 / float64(bundle.TotalRuns)
+		}
+		shotPct := 0.0
+		if bundle.TotalShots > 0 {
+			shotPct = float64(shots) * 100 / float64(bundle.TotalShots)
+		}
+		fmt.Fprintf(out, "  Z%d -> %d runs (%.1f%%), %d shots (%.1f%%), intensity=%s\n", i+1, bundle.ZoneRuns[i], runPct, shots, shotPct, battingBandLabel(bundle.ZoneRuns[i]))
 	}
 }
 
-func battingDensityGlyph(v int) rune {
+func battingBandLabel(v int) string {
 	switch {
 	case v >= 25:
-		return '@'
+		return "PEAK"
 	case v >= 15:
-		return '#'
+		return "VHIGH"
 	case v >= 10:
-		return 'O'
+		return "HIGH"
 	case v >= 5:
-		return 'o'
+		return "MED"
 	case v >= 1:
-		return '.'
+		return "LOW"
 	default:
-		return ' '
+		return "NONE"
 	}
 }
 
