@@ -28,6 +28,9 @@ type playerRuntimeOptions struct {
 	leagueID string
 	limit    int
 	match    string
+	scope    string
+	mapMode  string
+	mapLimit int
 }
 
 var newPlayerService = func() (playerCommandService, error) {
@@ -55,6 +58,7 @@ func newPlayersCommand(global *globalOptions) *cobra.Command {
 			"  cricinfo players deliveries <player> --match <match>",
 			"  cricinfo players bowling <player> --match <match>",
 			"  cricinfo players batting <player> --match <match>",
+			"  cricinfo players map-history <player> --scope season:2025 --league 8048",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -221,6 +225,33 @@ func newPlayersCommand(global *globalOptions) *cobra.Command {
 	}
 	battingCmd.Flags().StringVar(&opts.match, "match", "", "Required: match ID/ref/alias")
 
+	mapHistoryCmd := &cobra.Command{
+		Use:   "map-history <player>",
+		Short: "Show historical aggregated batting and bowling maps for a player",
+		Long: strings.Join([]string{
+			"Aggregate player maps across a historical scope and render visual text output.",
+			"Use --scope match:<match> for one match or --scope season:<season> for season-wide maps.",
+			"",
+			"Examples:",
+			"  cricinfo players map-history Virat Kohli --scope season:2025 --league 8048",
+			"  cricinfo players map-history Jason Holder --scope match:1529277 --league 8048 --mode bowling",
+		}, "\n"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !strings.EqualFold(global.format, "text") {
+				return fmt.Errorf("players map-history currently supports --format text only")
+			}
+			if strings.TrimSpace(opts.scope) == "" {
+				return fmt.Errorf("--scope is required (match:<match> or season:<season>)")
+			}
+			playerQuery := strings.TrimSpace(strings.Join(args, " "))
+			return runPlayerMapHistoryCommand(cmd, opts, playerQuery)
+		},
+	}
+	mapHistoryCmd.Flags().StringVar(&opts.scope, "scope", "", "Required: match:<match> or season:<season>")
+	mapHistoryCmd.Flags().StringVar(&opts.mapMode, "mode", "both", "Map mode: batting, bowling, or both")
+	mapHistoryCmd.Flags().IntVar(&opts.mapLimit, "match-limit", 0, "Optional cap on scoped matches before aggregation")
+
 	cmd.AddCommand(
 		searchCmd,
 		profileCmd,
@@ -233,6 +264,7 @@ func newPlayersCommand(global *globalOptions) *cobra.Command {
 		deliveriesCmd,
 		bowlingCmd,
 		battingCmd,
+		mapHistoryCmd,
 	)
 	return cmd
 }

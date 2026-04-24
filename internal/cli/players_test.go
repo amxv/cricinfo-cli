@@ -331,10 +331,22 @@ func TestPlayersHelpListsPhase10Commands(t *testing.T) {
 	for _, snippet := range []string{
 		"players search", "players profile", "players news", "players stats", "players career",
 		"players match-stats", "players innings", "players dismissals", "players deliveries", "players bowling", "players batting",
+		"players map-history",
 	} {
 		if !strings.Contains(helpText, snippet) {
 			t.Fatalf("expected help text to include %q, got %q", snippet, helpText)
 		}
+	}
+}
+
+func TestPlayersMapHistoryRequiresScopeFlag(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	err := Run([]string{"players", "map-history", "Virat", "Kohli"}, &out, &errBuf)
+	if err == nil || !strings.Contains(err.Error(), "--scope is required") {
+		t.Fatalf("expected --scope required error, got %v", err)
 	}
 }
 
