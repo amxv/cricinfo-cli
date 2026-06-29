@@ -1,0 +1,58 @@
+---
+import BaseLayout from "zuedocs/layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { primaryNav, siteConfig } from "../data/docs";
+
+const docs = (await getCollection("docs")).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout
+  title={`${siteConfig.name} | ${siteConfig.strapline}`}
+  description={siteConfig.description}
+  siteConfig={siteConfig}
+  primaryNav={primaryNav}
+>
+  <section class="hero shell">
+    <div class="hero__copy">
+      <p class="section-label">Go CLI for Cricinfo data</p>
+      <h1>Explore live cricket, scorecards, teams, players, leagues, and analysis from one terminal command.</h1>
+      <p class="hero__lede">
+        `cricinfo` wraps Cricinfo's cricket data into readable terminal views and structured JSON/JSONL output, so it works equally well for quick match lookups, scripts, and agent workflows.
+      </p>
+      <div class="hero__actions">
+        <a class="button button--solid" href="/docs/quickstart">Install the CLI</a>
+        <a class="button button--ghost" href="/docs/command-map">Browse commands</a>
+      </div>
+    </div>
+    <aside class="hero__panel">
+      <p class="hero__panel-label">Fast paths</p>
+      <ul class="hero__signal-list">
+        <li>List current and live matches.</li>
+        <li>Inspect scorecards, innings, partnerships, lineups, and delivery views.</li>
+        <li>Resolve players, teams, leagues, seasons, and standings.</li>
+        <li>Rank batting, bowling, dismissals, and partnerships from scoped data.</li>
+      </ul>
+      <div class="hero__terminal">
+        <span>$ npm i -g cricinfo-cli-go</span>
+        <span>$ cricinfo matches live</span>
+        <span>$ cricinfo analysis batting --metric strike-rate --scope season:2025 --league 19138 --format json</span>
+      </div>
+    </aside>
+  </section>
+
+  <section class="shell docs-teaser">
+    <div class="section-heading">
+      <p class="section-label">Docs</p>
+      <h2>Start with the CLI shape, then compose deeper cricket workflows.</h2>
+    </div>
+    <div class="docs-teaser__grid">
+      {docs.map((entry) => (
+        <a class="docs-teaser__card" href={`/docs/${entry.id}`}>
+          <span>{entry.data.category}</span>
+          <h3>{entry.data.title}</h3>
+          <p>{entry.data.summary ?? entry.data.description}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

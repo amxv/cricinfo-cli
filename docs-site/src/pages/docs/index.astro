@@ -1,0 +1,46 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "zuedocs/layouts/BaseLayout.astro";
+import { docCategories, primaryNav, siteConfig } from "../../data/docs";
+
+const entries = (await getCollection("docs")).sort((a, b) => a.data.order - b.data.order);
+const grouped = docCategories.map((category) => ({
+  category,
+  entries: entries.filter((entry) => entry.data.category === category)
+}));
+---
+
+<BaseLayout
+  title={`${siteConfig.name} Docs`}
+  description={siteConfig.description}
+  siteConfig={siteConfig}
+  primaryNav={primaryNav}
+>
+  <section class="shell docs-index-hero">
+    <p class="section-label">Documentation</p>
+    <h1>Use Cricinfo data from the terminal without hand-rolling API calls.</h1>
+    <p>
+      Start with installation and global flags, then drill into match, player, team, league, search, and analysis workflows.
+      The command examples are written for humans and agents that need stable text, JSON, or JSONL output.
+    </p>
+  </section>
+
+  <section class="shell docs-index">
+    {grouped.map((group) => (
+      <section class="docs-index__group">
+        <div class="docs-index__group-head">
+          <p class="section-label">{group.category}</p>
+        </div>
+        <div class="docs-index__cards">
+          {group.entries.map((entry) => (
+            <a class="docs-index__card" href={`/docs/${entry.id}`}>
+              <h2>{entry.data.title}</h2>
+              <p>{entry.data.description}</p>
+              <span>Open guide</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))}
+  </section>
+</BaseLayout>
