@@ -6,6 +6,8 @@ export const siteConfig = {
   description:
     "Documentation for cricinfo, a Go-powered Cricinfo command line interface for live matches, scorecards, player and team data, league traversal, and cricket analysis workflows.",
   repoUrl: "https://github.com/amxv/cricinfo-cli",
+  accentColor: "#047857",
+  accentColorDark: "#34d399",
   footerSections: [
     {
       title: "cricinfo",
@@ -32,7 +34,6 @@ export const docCategories = [
 ] as const;
 
 export const primaryNav = [
-  { href: "/", label: "Overview" },
   { href: "/docs", label: "Docs" },
   { href: "/docs/quickstart", label: "Quickstart" },
   { href: siteConfig.repoUrl, label: "GitHub", external: true }
