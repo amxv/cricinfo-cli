@@ -4,55 +4,308 @@ import { getCollection } from "astro:content";
 import { primaryNav, siteConfig } from "../data/docs";
 
 const docs = (await getCollection("docs")).sort((a, b) => a.data.order - b.data.order);
+const commandGroups = [
+  ["matches", "Live scores, scorecards, deliveries"],
+  ["players", "Profiles, careers, maps, match stats"],
+  ["teams", "Rosters, leaders, records, scores"],
+  ["analysis", "Batting, bowling, dismissals, partnerships"],
+];
 ---
 
 <BaseLayout
-  title={`${siteConfig.name} | ${siteConfig.strapline}`}
+  title={`${siteConfig.name} | Cricket data for humans and agents`}
   description={siteConfig.description}
   siteConfig={siteConfig}
   primaryNav={primaryNav}
 >
-  <section class="hero shell">
-    <div class="hero__copy">
-      <p class="section-label">Go CLI for Cricinfo data</p>
-      <h1>Explore live cricket, scorecards, teams, players, leagues, and analysis from one terminal command.</h1>
-      <p class="hero__lede">
-        `cricinfo` wraps Cricinfo's cricket data into readable terminal views and structured JSON/JSONL output, so it works equally well for quick match lookups, scripts, and agent workflows.
-      </p>
-      <div class="hero__actions">
-        <a class="button button--solid" href="/docs/quickstart">Install the CLI</a>
-        <a class="button button--ghost" href="/docs/command-map">Browse commands</a>
+  <div class="cricket-home">
+    <section class="score-hero shell">
+      <div class="score-hero__rail" aria-hidden="true">
+        <span>LIVE DATA</span><i></i><span>GO CLI</span><i></i><span>AGENT READY</span>
       </div>
-    </div>
-    <aside class="hero__panel">
-      <p class="hero__panel-label">Fast paths</p>
-      <ul class="hero__signal-list">
-        <li>List current and live matches.</li>
-        <li>Inspect scorecards, innings, partnerships, lineups, and delivery views.</li>
-        <li>Resolve players, teams, leagues, seasons, and standings.</li>
-        <li>Rank batting, bowling, dismissals, and partnerships from scoped data.</li>
-      </ul>
-      <div class="hero__terminal">
-        <span>$ npm i -g cricinfo-cli-go</span>
-        <span>$ cricinfo matches live</span>
-        <span>$ cricinfo analysis batting --metric strike-rate --scope season:2025 --league 19138 --format json</span>
-      </div>
-    </aside>
-  </section>
 
-  <section class="shell docs-teaser">
-    <div class="section-heading">
-      <p class="section-label">Docs</p>
-      <h2>Start with the CLI shape, then compose deeper cricket workflows.</h2>
-    </div>
-    <div class="docs-teaser__grid">
-      {docs.map((entry) => (
-        <a class="docs-teaser__card" href={`/docs/${entry.id}`}>
-          <span>{entry.data.category}</span>
-          <h3>{entry.data.title}</h3>
-          <p>{entry.data.summary ?? entry.data.description}</p>
-        </a>
-      ))}
-    </div>
-  </section>
+      <div class="score-hero__copy">
+        <p class="eyebrow"><span class="live-dot"></span> Super fast cricket analytics for agents</p>
+        <h1>Every ball.<br /><em>One command.</em></h1>
+        <p class="hero-lede">
+          The vast, messy world of Cricinfo data—live matches, players, leagues, pitch maps, and derived analysis—shaped into a fast, self-describing Go CLI.
+        </p>
+        <div class="hero-actions">
+          <a class="action action--primary" href="/docs/quickstart">
+            <span>Install cricinfo</span><b>↗</b>
+          </a>
+          <a class="action action--secondary" href="https://github.com/amxv/cricinfo-cli">
+            <span>View source</span><b>GH</b>
+          </a>
+        </div>
+        <div class="install-strip" aria-label="Install command">
+          <span class="prompt">$</span>
+          <code>npm i -g cricinfo-cli-go</code>
+          <button class="copy-install" type="button" data-copy="npm i -g cricinfo-cli-go" aria-label="Copy install command">COPY</button>
+        </div>
+      </div>
+
+      <div class="match-card" aria-label="Example live cricket data in terminal">
+        <div class="match-card__top">
+          <div><span class="live-dot"></span> LIVE</div>
+          <span>cricinfo matches live-view</span>
+        </div>
+        <div class="scoreboard">
+          <div class="team-row">
+            <span class="flag flag--ind">IND</span>
+            <strong>287/4</strong>
+            <small>46.2 OV</small>
+          </div>
+          <div class="match-state">INDIA NEED 34 FROM 22 BALLS</div>
+          <div class="crease">
+            <div><b>V. KOHLI</b><span>94 <small>(81)</small></span></div>
+            <div><b>R. JADEJA</b><span>31 <small>(19)</small></span></div>
+          </div>
+          <div class="over-strip">
+            <span>1</span><span>4</span><span class="wicket">W</span><span>0</span><span>6</span><span>2</span>
+          </div>
+        </div>
+        <div class="terminal-lines">
+          <p><i>›</i> fetching scorecard, innings, partnerships</p>
+          <p><i>›</i> traversed 7 endpoints in parallel</p>
+          <p class="success"><i>✓</i> rendered live view in 418ms</p>
+        </div>
+        <div class="pitch" aria-hidden="true">
+          <span class="crease-line crease-line--top"></span>
+          <span class="stumps stumps--top">|||</span>
+          <span class="ball ball--one"></span>
+          <span class="ball ball--two"></span>
+          <span class="ball ball--three"></span>
+          <span class="stumps stumps--bottom">|||</span>
+          <span class="crease-line crease-line--bottom"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="ticker" aria-label="Features">
+      <div class="ticker__track">
+        <span>Ball-by-ball deliveries</span><i>◆</i><span>Live pitch maps</span><i>◆</i><span>Cursor pagination</span><i>◆</i><span>Goroutine parallelism</span><i>◆</i><span>JSON + JSONL</span><i>◆</i><span>Ball-by-ball deliveries</span><i>◆</i><span>Live pitch maps</span>
+      </div>
+    </section>
+
+    <section class="command-section shell">
+      <header class="section-head">
+        <div><span>01</span><p>THE COMMAND TREE</p></div>
+        <h2>Ask cricket questions.<br />Not API questions.</h2>
+        <p>Cricinfo’s internal API is fragmented across paginated endpoints. The CLI absorbs that complexity and gives you commands that match how you already think about the game.</p>
+      </header>
+
+      <div class="command-grid">
+        {commandGroups.map(([name, description], index) => (
+          <a href="/docs/command-map" class="command-card">
+            <span class="command-card__number">0{index + 1}</span>
+            <div class="command-card__icon" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</div>
+            <h3>cricinfo {name}</h3>
+            <p>{description}</p>
+            <span class="command-card__arrow">→</span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="split-feature">
+      <div class="split-feature__inner shell">
+        <div class="feature-copy">
+          <p class="eyebrow">BUILT FOR THE SECOND READER</p>
+          <h2>Readable by you.<br /><em>Structured for agents.</em></h2>
+          <p>Human-friendly text is the default. Add one flag and the same command becomes clean JSON or streaming JSONL for scripts, pipelines, and coding agents.</p>
+          <a href="/docs/analysis-and-output">Explore output modes <span>→</span></a>
+        </div>
+        <div class="output-switcher">
+          <div class="output-tabs"><span class="active">TEXT</span><span>JSON</span><span>JSONL</span></div>
+          <pre><code><span class="dim">$ cricinfo analysis batting \</span>
+  --metric strike-rate \
+  --scope season:2025 \
+  --league 19138
+
+<span class="green">1.</span> Nicholas Pooran   <b>177.34</b>
+<span class="green">2.</span> Suryakumar Yadav  <b>167.91</b>
+<span class="green">3.</span> Travis Head       <b>162.42</b>
+
+<span class="dim">42 players · 126 innings · 0.61s</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="docs-section shell">
+      <header class="section-head section-head--docs">
+        <div><span>02</span><p>DOCUMENTATION</p></div>
+        <h2>From first command<br />to deep analysis.</h2>
+      </header>
+      <div class="docs-list">
+        {docs.map((entry, index) => (
+          <a class="doc-row" href={`/docs/${entry.id}`}>
+            <span class="doc-row__index">{String(index + 1).padStart(2, "0")}</span>
+            <span class="doc-row__category">{entry.data.category}</span>
+            <h3>{entry.data.title}</h3>
+            <p>{entry.data.summary ?? entry.data.description}</p>
+            <span class="doc-row__arrow">↗</span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="closing shell">
+      <div class="closing__mark" aria-hidden="true">6</div>
+      <div>
+        <p class="eyebrow">OPEN SOURCE · APACHE 2.0</p>
+        <h2>Give your agent<br />a seat in the press box.</h2>
+        <p>Install one binary. Ask better cricket questions.</p>
+        <a class="action action--primary" href="/docs/quickstart"><span>Get started</span><b>→</b></a>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    document.querySelector('.copy-install')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      await navigator.clipboard.writeText(button.dataset.copy || '');
+      button.textContent = 'COPIED';
+      window.setTimeout(() => button.textContent = 'COPY', 1400);
+    });
+  </script>
 </BaseLayout>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@300;400;500&family=Newsreader:ital,opsz,wght@1,6..72,500&display=swap');
+
+  :global(:root) { --cricket: #0d7a4a; --lime: #c7ff3d; --orange: #ff5a1f; --paper: #f3f0e7; --night: #101512; }
+  :global(:root[data-theme="dark"]) { --paper: #111612; --night: #f0f2e9; }
+  :global(body) { font-family: "DM Mono", monospace; }
+  :global(.site-header), :global(.site-footer) { font-family: "DM Mono", monospace; }
+  :global(.brand__name) { font-family: "Archivo Black", sans-serif; letter-spacing: -0.05em; }
+
+  .cricket-home { background: var(--paper); color: var(--night); overflow: hidden; }
+  .score-hero { position: relative; display: grid; grid-template-columns: 1.02fr .98fr; gap: clamp(3rem, 7vw, 7rem); align-items: center; min-height: 760px; padding-top: 6rem; padding-bottom: 6rem; }
+  .score-hero::before { content: ""; position: absolute; width: 32rem; height: 32rem; right: -18rem; top: 1rem; border: 1px solid color-mix(in srgb, var(--night) 14%, transparent); border-radius: 50%; box-shadow: 0 0 0 5rem color-mix(in srgb, var(--night) 3%, transparent), 0 0 0 10rem color-mix(in srgb, var(--night) 2%, transparent); }
+  .score-hero__rail { position: absolute; left: -3.5rem; top: 9rem; bottom: 9rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; color: color-mix(in srgb, var(--night) 45%, transparent); font-size: .62rem; letter-spacing: .16em; writing-mode: vertical-rl; }
+  .score-hero__rail i { width: 1px; flex: 1; margin: 1rem 0; background: color-mix(in srgb, var(--night) 18%, transparent); }
+  .eyebrow { display: flex; align-items: center; gap: .7rem; color: var(--cricket); font-size: .72rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
+  .live-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--orange) 18%, transparent); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 .5rem transparent; } }
+  .score-hero h1 { max-width: 9ch; margin-top: 1.5rem; font-family: "Archivo Black", sans-serif; font-size: clamp(4.6rem, 8.4vw, 8.7rem); font-weight: 400; letter-spacing: -.085em; line-height: .82; text-transform: uppercase; }
+  .score-hero h1 em, .feature-copy h2 em { color: var(--cricket); font-family: "Newsreader", serif; font-weight: 500; text-transform: none; }
+  .hero-lede { max-width: 43rem; margin-top: 2.2rem; color: color-mix(in srgb, var(--night) 68%, transparent); font-family: ui-sans-serif, system-ui, sans-serif; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.65; }
+  .hero-actions { display: flex; gap: .8rem; margin-top: 2.4rem; }
+  .action { display: inline-flex; align-items: center; justify-content: space-between; min-width: 12rem; padding: 1rem 1.1rem; border: 1px solid var(--night); font-size: .72rem; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; transition: transform .2s, box-shadow .2s, background .2s; }
+  .action:hover { text-decoration: none; transform: translate(-3px,-3px); box-shadow: 5px 5px 0 var(--orange); }
+  .action--primary { background: var(--night); color: var(--paper); }
+  .action--secondary { background: transparent; }
+  .install-strip { display: flex; align-items: center; max-width: 36rem; margin-top: 1.1rem; border: 1px solid color-mix(in srgb, var(--night) 25%, transparent); background: color-mix(in srgb, var(--paper) 75%, transparent); }
+  .install-strip .prompt { padding: .8rem 0 .8rem 1rem; color: var(--cricket); }
+  .install-strip code { flex: 1; padding: .8rem; font-size: .78rem; }
+  .copy-install { align-self: stretch; padding: 0 1rem; border: 0; border-left: 1px solid color-mix(in srgb, var(--night) 25%, transparent); background: transparent; color: inherit; font: inherit; font-size: .62rem; cursor: pointer; }
+  .copy-install:hover { background: var(--lime); color: #101512; }
+
+  .match-card { position: relative; z-index: 2; border: 2px solid var(--night); background: #121713; color: #ecf1e7; box-shadow: 18px 18px 0 var(--cricket); transform: rotate(1.25deg); }
+  .match-card__top { display: flex; justify-content: space-between; padding: .85rem 1rem; border-bottom: 1px solid #364039; color: #9ca79e; font-size: .63rem; letter-spacing: .08em; text-transform: uppercase; }
+  .match-card__top div { display: flex; align-items: center; gap: .6rem; color: #fff; }
+  .scoreboard { padding: 2rem; }
+  .team-row { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: end; }
+  .flag { display: grid; place-items: center; width: 3.2rem; height: 2rem; background: linear-gradient(#ff9933 0 33%,#fff 33% 66%,#138808 66%); color: #101512; font-size: .62rem; font-weight: 600; }
+  .team-row strong { font-family: "Archivo Black", sans-serif; font-size: 4.5rem; line-height: .8; letter-spacing: -.06em; }
+  .team-row small { color: #95a197; font-size: .7rem; }
+  .match-state { margin: 1.5rem 0; padding: .65rem .8rem; background: var(--lime); color: #101512; font-size: .7rem; font-weight: 500; letter-spacing: .08em; }
+  .crease { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #364039; border: 1px solid #364039; }
+  .crease div { display: flex; justify-content: space-between; padding: .8rem; background: #171d18; font-size: .68rem; }
+  .crease span { color: var(--lime); }
+  .crease small { color: #95a197; }
+  .over-strip { display: flex; gap: .55rem; margin-top: 1.3rem; }
+  .over-strip span { display: grid; place-items: center; width: 2rem; height: 2rem; border: 1px solid #435047; border-radius: 50%; font-size: .68rem; }
+  .over-strip .wicket { border-color: var(--orange); background: var(--orange); color: white; }
+  .terminal-lines { padding: 1.2rem 2rem; border-top: 1px solid #364039; color: #8f9c91; font-size: .62rem; line-height: 2; }
+  .terminal-lines i { margin-right: .6rem; color: var(--lime); font-style: normal; }
+  .terminal-lines .success { color: #d7ded7; }
+  .pitch { position: absolute; width: 7rem; height: 14rem; right: -3.2rem; bottom: -5rem; border: 2px solid var(--night); background: #b9935a; box-shadow: 8px 8px 0 var(--orange); transform: rotate(-8deg); }
+  .crease-line { position: absolute; left: .7rem; right: .7rem; height: 1px; background: white; }
+  .crease-line--top { top: 2rem; } .crease-line--bottom { bottom: 2rem; }
+  .stumps { position: absolute; left: 50%; transform: translateX(-50%); color: white; font-size: .7rem; letter-spacing: -.2em; }
+  .stumps--top { top: 1.2rem; } .stumps--bottom { bottom: 1.2rem; }
+  .ball { position: absolute; width: .45rem; height: .45rem; border-radius: 50%; background: #d92e22; box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+  .ball--one { left: 2rem; top: 5rem; } .ball--two { right: 1.4rem; top: 7.2rem; } .ball--three { left: 3rem; bottom: 3.8rem; }
+
+  .ticker { overflow: hidden; border-block: 1px solid var(--night); background: var(--cricket); color: white; transform: rotate(-1deg) scale(1.02); }
+  .ticker__track { display: flex; width: max-content; gap: 2rem; padding: 1rem 0; font-family: "Archivo Black", sans-serif; font-size: .86rem; letter-spacing: .02em; text-transform: uppercase; animation: ticker 28s linear infinite; }
+  .ticker__track i { color: var(--lime); font-style: normal; }
+  @keyframes ticker { to { transform: translateX(-50%); } }
+
+  .command-section, .docs-section { padding-top: 9rem; padding-bottom: 9rem; }
+  .section-head { display: grid; grid-template-columns: 12rem 1fr 1fr; gap: 3rem; align-items: start; margin-bottom: 4rem; }
+  .section-head > div { display: flex; gap: .8rem; align-items: center; font-size: .65rem; letter-spacing: .1em; }
+  .section-head > div span { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border: 1px solid var(--night); border-radius: 50%; }
+  .section-head h2 { font-family: "Archivo Black", sans-serif; font-size: clamp(2.8rem, 5vw, 5rem); font-weight: 400; letter-spacing: -.065em; line-height: .92; text-transform: uppercase; }
+  .section-head > p { color: color-mix(in srgb, var(--night) 66%, transparent); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.7; }
+  .command-grid { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--night); border-left: 1px solid var(--night); }
+  .command-card { position: relative; min-height: 23rem; padding: 1.4rem; border-right: 1px solid var(--night); border-bottom: 1px solid var(--night); transition: background .25s, color .25s; }
+  .command-card:hover { background: var(--night); color: var(--paper); text-decoration: none; }
+  .command-card__number { font-size: .62rem; }
+  .command-card__icon { display: grid; place-items: center; width: 4rem; height: 4rem; margin: 4rem 0 2.3rem; border: 1px solid currentColor; border-radius: 50%; font-family: "Newsreader", serif; font-size: 2rem; font-style: italic; }
+  .command-card h3 { font-family: "Archivo Black", sans-serif; font-size: 1.35rem; letter-spacing: -.04em; }
+  .command-card p { margin-top: .8rem; color: color-mix(in srgb, currentColor 65%, transparent); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .85rem; line-height: 1.55; }
+  .command-card__arrow { position: absolute; right: 1.4rem; bottom: 1.4rem; font-size: 1.5rem; }
+
+  .split-feature { background: #101512; color: #edf0e9; }
+  .split-feature__inner { display: grid; grid-template-columns: 1fr 1fr; gap: 7rem; align-items: center; min-height: 720px; padding-top: 7rem; padding-bottom: 7rem; }
+  .feature-copy h2 { margin-top: 1.3rem; font-family: "Archivo Black", sans-serif; font-size: clamp(3.4rem, 6vw, 6rem); font-weight: 400; letter-spacing: -.075em; line-height: .88; text-transform: uppercase; }
+  .feature-copy > p:not(.eyebrow) { max-width: 36rem; margin-top: 2rem; color: #aab3ac; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1.05rem; line-height: 1.7; }
+  .feature-copy a { display: inline-flex; gap: 3rem; margin-top: 2rem; padding-bottom: .5rem; border-bottom: 1px solid #647068; color: var(--lime); font-size: .72rem; text-transform: uppercase; }
+  .output-switcher { border: 1px solid #3b463e; background: #161c17; box-shadow: 16px 16px 0 #224d36; }
+  .output-tabs { display: flex; border-bottom: 1px solid #3b463e; }
+  .output-tabs span { padding: .8rem 1rem; color: #79827b; font-size: .62rem; }
+  .output-tabs .active { background: var(--lime); color: #101512; }
+  .output-switcher pre { min-height: 25rem; margin: 0; padding: 2rem; overflow: auto; color: #dde4dd; font: .78rem/1.9 "DM Mono", monospace; }
+  .output-switcher .dim { color: #78837b; } .output-switcher .green { color: var(--lime); } .output-switcher b { color: white; }
+
+  .section-head--docs { grid-template-columns: 12rem 1fr; }
+  .docs-list { border-top: 1px solid var(--night); }
+  .doc-row { display: grid; grid-template-columns: 4rem 8rem 1.1fr 1.5fr 2rem; gap: 1.5rem; align-items: center; min-height: 7.5rem; border-bottom: 1px solid color-mix(in srgb, var(--night) 28%, transparent); transition: padding .2s, background .2s; }
+  .doc-row:hover { padding-inline: 1rem; background: var(--lime); color: #101512; text-decoration: none; }
+  .doc-row__index, .doc-row__category { font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
+  .doc-row h3 { font-family: "Archivo Black", sans-serif; font-size: 1.3rem; letter-spacing: -.04em; }
+  .doc-row p { color: color-mix(in srgb, currentColor 65%, transparent); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .83rem; line-height: 1.55; }
+  .doc-row__arrow { font-size: 1.2rem; }
+
+  .closing { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; min-height: 650px; border-top: 1px solid var(--night); }
+  .closing__mark { font-family: "Archivo Black", sans-serif; font-size: 30rem; line-height: .7; color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--night) 25%, transparent); }
+  .closing h2 { margin-top: 1.2rem; font-family: "Archivo Black", sans-serif; font-size: clamp(3.5rem, 6vw, 6rem); font-weight: 400; letter-spacing: -.07em; line-height: .9; text-transform: uppercase; }
+  .closing > div:last-child > p:not(.eyebrow) { margin: 1.5rem 0 2rem; font-family: ui-sans-serif, system-ui, sans-serif; }
+
+  @media (max-width: 900px) {
+    .score-hero { grid-template-columns: 1fr; padding-top: 4rem; }
+    .score-hero__rail, .score-hero::before { display: none; }
+    .score-hero h1 { font-size: clamp(4rem, 18vw, 7rem); }
+    .match-card { margin-right: 1.5rem; transform: none; }
+    .pitch { right: -1rem; }
+    .section-head, .section-head--docs { grid-template-columns: 1fr; }
+    .command-grid { grid-template-columns: 1fr 1fr; }
+    .split-feature__inner { grid-template-columns: 1fr; gap: 4rem; }
+    .doc-row { grid-template-columns: 3rem 1fr 2rem; padding: 1.4rem 0; }
+    .doc-row__category, .doc-row p { display: none; }
+    .closing { grid-template-columns: .5fr 1fr; }
+    .closing__mark { font-size: 18rem; }
+  }
+  @media (max-width: 560px) {
+    .score-hero { min-height: 0; padding-block: 3rem 5rem; }
+    .score-hero h1 { font-size: 3.8rem; }
+    .hero-actions { flex-direction: column; }
+    .action { width: 100%; }
+    .install-strip code { font-size: .66rem; }
+    .team-row strong { font-size: 3rem; }
+    .pitch { display: none; }
+    .command-section, .docs-section { padding-block: 6rem; }
+    .command-grid { grid-template-columns: 1fr; }
+    .command-card { min-height: 18rem; }
+    .section-head h2, .feature-copy h2, .closing h2 { font-size: 3rem; }
+    .split-feature__inner { min-height: 0; padding-block: 5rem; }
+    .output-switcher pre { padding: 1.2rem; font-size: .63rem; }
+    .closing { grid-template-columns: 1fr; min-height: 560px; }
+    .closing__mark { position: absolute; right: -2rem; top: 3rem; z-index: 0; font-size: 18rem; opacity: .45; }
+    .closing > div:last-child { position: relative; z-index: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { .ticker__track, .live-dot { animation: none; } }
+</style>
