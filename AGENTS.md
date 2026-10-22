@@ -61,3 +61,7 @@ If you touch release artifacts or the binary name, update `package.json`, `bin/c
 - Do not rewrite user changes in unrelated files.
 - Keep help output concrete and command-local so `<command> --help` explains the next step.
 - If you add dependencies, commit the updated `go.sum` and verify the release workflow still builds cleanly.
+
+### Docs deployment
+
+The Docs GitHub Actions workflow deploys production only for the watched site paths; Vercel Git auto-deployments and `ignoreCommand` stay disabled. Keep the project-scoped `VERCEL_TOKEN` Actions secret and ID variables configured. Check Astro locally; builds run in CI.
