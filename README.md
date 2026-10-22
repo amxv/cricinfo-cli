@@ -2,6 +2,8 @@
 
 `cricinfo` is a Go-powered Cricinfo CLI published on npm as `cricinfo-cli-go`. It is designed for both human workflows and agent workflows, with readable text output by default and structured JSON or JSONL for automation.
 
+Documentation: [cricinfo-cli.ashray.xyz](https://cricinfo-cli.ashray.xyz)
+
 ## Install
 
 Install the latest published package globally:
