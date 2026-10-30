@@ -7,14 +7,14 @@ BIN_NAME ?= cricinfo
 CMD_PATH ?= ./cmd/$(BIN_NAME)
 DIST_DIR ?= dist
 BIN_PATH ?= $(DIST_DIR)/$(BIN_NAME)
-VERSION ?= $(shell node -p "require('./package.json').version" 2>/dev/null)
+VERSION ?= $(shell node -p "require('./npm/package.json').version" 2>/dev/null)
 LDFLAGS ?= -s -w -X github.com/amxv/cricinfo-cli/internal/buildinfo.Version=$(if $(VERSION),$(VERSION),dev)
 ACCEPTANCE_LEAGUE ?= 11132
 ACCEPTANCE_MATCH ?= 1527689
 ACCEPTANCE_PLAYER ?= Virat Kohli
 ACCEPTANCE_TEAM ?= rr
 
-.PHONY: help fmt test test-live test-live-smoke fixtures-refresh vet lint check build build-all npm-smoke acceptance install-local clean release-tag
+.PHONY: docs-check docs-build help fmt test test-live test-live-smoke fixtures-refresh vet lint check build build-all npm-smoke acceptance install-local clean release-tag
 
 help:
 	@echo "cricinfo command runner"
@@ -37,7 +37,7 @@ help:
 	@echo "  make release-tag  - create and push git tag (requires VERSION=x.y.z)"
 
 fmt:
-	@$(GOFMT) -w $$(find . -type f -name '*.go' -not -path './dist/*')
+	@$(GOFMT) -w $$(find cmd internal -type f -name '*.go')
 
 test:
 	@$(GO) test ./...
@@ -55,7 +55,13 @@ vet:
 	@$(GO) vet ./...
 
 lint:
-	@$(NODE_SHELL) 'npm run lint'
+	@npm --prefix npm run lint
+
+docs-check:
+	@cd docs && bun run check
+
+docs-build:
+	@cd docs && bun run build
 
 check: fmt test vet lint
 
@@ -76,12 +82,13 @@ build-all:
 
 npm-smoke:
 	@set -euo pipefail; \
-	PACK_NAME="$$( $(NODE_SHELL) "npm pack --silent" )"; \
-	TMP_DIR="tmp/npm-smoke.$$"; \
+	node npm/scripts/prepare-package.mjs; \
+	PACK_NAME="$$(cd npm/.publish && npm pack --silent --ignore-scripts)"; \
+TMP_DIR="$$(mktemp -d)"; \
 	/bin/rm -rf "$$TMP_DIR"; \
 	mkdir -p "$$TMP_DIR"; \
-	trap '/bin/rm -rf "$$TMP_DIR" "$$PACK_NAME"' EXIT; \
-	$(NODE_SHELL) "npm install --prefix '$$TMP_DIR/prefix' './$$PACK_NAME' >/dev/null"; \
+	trap '/bin/rm -rf "$$TMP_DIR" "npm/.publish/$$PACK_NAME"' EXIT; \
+	$(NODE_SHELL) "npm install --prefix '$$TMP_DIR/prefix' './npm/.publish/$$PACK_NAME' >/dev/null"; \
 	$(NODE_SHELL) "'$$TMP_DIR/prefix/node_modules/.bin/$(BIN_NAME)' --help >/dev/null"; \
 	echo "npm smoke ok: $$PACK_NAME"
 
@@ -123,7 +130,7 @@ install-local: build
 	@echo "Installed $(BIN_NAME) to $$HOME/.local/bin/$(BIN_NAME)"
 
 clean:
-	@rm -rf $(DIST_DIR)
+	@rm -rf $(DIST_DIR) npm/.publish docs/dist docs/.astro .vercel/output
 
 release-tag:
 	@test -n "$(VERSION)" || (echo "Usage: make release-tag VERSION=x.y.z" && exit 1)

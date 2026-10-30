@@ -2,6 +2,8 @@
 
 `cricinfo` is a Go-powered Cricinfo CLI published on npm as `cricinfo-cli-go`. It is designed for both human workflows and agent workflows, with readable text output by default and structured JSON or JSONL for automation.
 
+The Go module stays at the repository root, the Astro site lives in `docs/`, and the npm CLI package is assembled from `npm/` (including a Go source-build fallback).
+
 Documentation: [cricinfo-cli.ashray.xyz](https://cricinfo-cli.ashray.xyz)
 
 ## Install
@@ -126,7 +128,7 @@ Release artifact conventions:
 
 - binary name: `cricinfo`
 - GitHub release assets: `cricinfo_<goos>_<goarch>[.exe]`
-- npm shim: `bin/cricinfo.js`
-- install fallback: `scripts/postinstall.js`
+- npm shim: `npm/bin/cricinfo.js`
+- install fallback: `npm/scripts/postinstall.js`
 
-If you change the CLI name or release artifact layout, update `package.json`, `bin/cricinfo.js`, `scripts/postinstall.js`, `Makefile`, and `.github/workflows/release.yml` together.
+If you change the CLI name or release artifact layout, update `npm/package.json`, `npm/bin/cricinfo.js`, `npm/scripts/postinstall.js`, `Makefile`, and `.github/workflows/release.yml` together.

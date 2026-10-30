@@ -18,8 +18,8 @@ The repository ships a Go binary through an npm package. Treat the Go CLI, Node 
 | `internal/app/app.go` | Command parsing and top-level dispatch. |
 | `internal/cli/` | Command families, help text, and flag wiring. |
 | `internal/cricinfo/` | Transport, normalization, rendering, resolver, fixtures, and analysis logic. |
-| `bin/cricinfo.js` | npm shim that launches the installed native binary. |
-| `scripts/postinstall.js` | Downloads tagged release assets or falls back to a local Go build. |
+| `npm/bin/cricinfo.js` | npm shim that launches the installed native binary. |
+| `npm/scripts/postinstall.js` | Downloads tagged release assets or falls back to a local Go build. |
 | `Makefile` | Local build, check, smoke, acceptance, and release helpers. |
 | `.github/workflows/release.yml` | Tag-driven CI, GitHub release assets, and npm publish pipeline. |
 

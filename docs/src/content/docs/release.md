@@ -23,9 +23,9 @@ Releases are tag-driven. Push a `vX.Y.Z` tag and GitHub Actions handles validati
 | --- | --- |
 | Binary name | `cricinfo` |
 | npm package | `cricinfo-cli-go` |
-| npm command | `cricinfo` from `bin/cricinfo.js` |
+| npm command | `cricinfo` from `npm/bin/cricinfo.js` |
 | GitHub release asset | `cricinfo_<goos>_<goarch>[.exe]` |
-| Install fallback | `scripts/postinstall.js` builds locally if no matching asset is available. |
+| Install fallback | `npm/scripts/postinstall.js` builds locally if no matching asset is available. |
 
 Supported release targets are built by `make build-all`:
 
@@ -49,9 +49,9 @@ The Makefile creates and pushes `vX.Y.Z`. Make sure the package version and inte
 
 If you change the CLI name, package name, binary naming, or release asset layout, update these together:
 
-- `package.json`
-- `bin/cricinfo.js`
-- `scripts/postinstall.js`
+- `npm/package.json`
+- `npm/bin/cricinfo.js`
+- `npm/scripts/postinstall.js`
 - `Makefile`
 - `.github/workflows/release.yml`
 

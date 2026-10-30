@@ -6,7 +6,8 @@
   "author": "amxv",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amxv/cricinfo-cli.git"
+    "url": "git+https://github.com/amxv/cricinfo-cli.git",
+    "directory": "npm"
   },
   "homepage": "https://cricinfo-cli.ashray.xyz",
   "bugs": {
@@ -26,17 +27,13 @@
     "go.mod",
     "go.sum",
     "README.md",
-    "LICENSE",
-    "AGENTS.md",
-    "CONTRIBUTORS.md",
-    "Makefile"
+    "LICENSE"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "test": "node --check bin/cricinfo.js && node --check scripts/postinstall.js",
+    "test": "node --check bin/cricinfo.js && node --check scripts/postinstall.js && node --test scripts/prepare-package.test.mjs",
     "lint": "npm run test",
-    "fixtures:refresh": "go run ./internal/cricinfo/cmd/fixture-refresh --write",
-    "test:live": "CRICINFO_LIVE_MATRIX=1 go test ./internal/cricinfo -run TestLive -count=1"
+    "prepare:package": "node scripts/prepare-package.mjs"
   },
   "engines": {
     "node": ">=18"

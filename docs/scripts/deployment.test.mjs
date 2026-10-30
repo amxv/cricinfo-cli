@@ -15,7 +15,7 @@ test('filtered GitHub pushes trigger deployment only for actual site inputs', ()
     assert.ok(block, 'missing event: ' + event);
     assert.match(block, /branches: \[main\]/);
     const found = [...block.matchAll(/^      - "([^"]+)"$/gm)].map(m => m[1]);
-    assert.deepEqual(found, ["docs-site/**"]);
+    assert.deepEqual(found, ["docs/**"]);
   }
   assert.match(workflow, /secrets\.VERCEL_TOKEN/);
   assert.match(workflow, /vars\.VERCEL_ORG_ID/);
@@ -26,7 +26,7 @@ test('filtered GitHub pushes trigger deployment only for actual site inputs', ()
 });
 
 test('only Actions creates Vercel deployments', () => {
-  const config = JSON.parse(readFileSync(path.join(repo, 'docs-site/vercel.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(path.join(repo, 'docs/vercel.json'), 'utf8'));
   assert.equal(config.git.deploymentEnabled, false);
   assert.equal(Object.hasOwn(config, 'ignoreCommand'), false);
 });
